@@ -1,0 +1,13 @@
+node_modules/
+.gradle/
+.expo/
+dist/
+build/
+*.log
+.env
+android/app/build/
+android/.gradle/
+jdk17/
+jdk17.zip
+cmdline-tools.zip
+uschat.apk

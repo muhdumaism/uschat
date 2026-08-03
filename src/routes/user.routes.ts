@@ -6,7 +6,7 @@ import { authenticate } from '../middleware/auth.middleware';
 const updateProfileSchema = z.object({
   displayName: z.string().min(1).max(50).optional(),
   bio: z.string().max(250).optional(),
-  avatarUrl: z.string().url().optional().nullable(),
+  avatarUrl: z.string().optional().nullable(),
   disappearingDefault: z.number().int().min(0).optional(),
 });
 
