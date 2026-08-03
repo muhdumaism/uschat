@@ -1,0 +1,178 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                    String        @id @default(uuid())
+  email                 String        @unique
+  passwordHash          String
+  username              String        @unique
+  displayName           String
+  bio                   String?       @default("")
+  avatarUrl             String?
+  role                  String        @default("USER")
+  isVerified            Boolean       @default(false)
+  verificationToken     String?
+  resetToken            String?
+  resetTokenExpires     DateTime?
+  usernameLastChangedAt DateTime?
+  disappearingDefault   Int           @default(0)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  devices               Device[]
+  sessions              Session[]
+  preKeys               PreKey[]
+  chatMembers           ChatMember[]
+  sentMessages          Message[]     @relation("SentMessages")
+  initiatedCalls        Call[]        @relation("InitiatedCalls")
+  reportsSubmitted      Report[]      @relation("ReportsSubmitted")
+  reportsAgainst        Report[]      @relation("ReportsAgainst")
+  pushTokens            PushToken[]
+}
+
+model Device {
+  id                String    @id @default(uuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceName        String
+  registrationId    Int
+  identityPublicKey String
+  signedPreKeyId    Int
+  signedPreKey      String
+  signedPreKeySig   String
+  lastSeenAt        DateTime  @default(now())
+  createdAt         DateTime  @default(now())
+
+  sessions          Session[]
+  preKeys           PreKey[]
+
+  @@unique([userId, registrationId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceId     String?
+  device       Device?  @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  token        String   @unique
+  refreshToken String   @unique
+  ipAddress    String?
+  userAgent    String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+}
+
+model PreKey {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceId  String
+  device    Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  keyId     Int
+  publicKey String
+  createdAt DateTime @default(now())
+
+  @@unique([deviceId, keyId])
+}
+
+model Chat {
+  id        String       @id @default(uuid())
+  type      String       @default("DIRECT")
+  name      String?
+  avatar    String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  members   ChatMember[]
+  messages  Message[]
+  calls     Call[]
+}
+
+model ChatMember {
+  id         String   @id @default(uuid())
+  chatId     String
+  chat       Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       String   @default("MEMBER")
+  isMuted    Boolean  @default(false)
+  isArchived Boolean  @default(false)
+  joinedAt   DateTime @default(now())
+
+  @@unique([chatId, userId])
+}
+
+model Message {
+  id                   String       @id @default(uuid())
+  chatId               String
+  chat                 Chat         @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  senderId             String
+  sender               User         @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  encryptedContent     String
+  nonce                String?
+  messageType          String       @default("TEXT")
+  ephemeralDuration    Int          @default(0)
+  ephemeralExpiresAt   DateTime?
+  viewOnce             Boolean      @default(false)
+  isViewed             Boolean      @default(false)
+  replyToId            String?
+  replyTo              Message?     @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies              Message[]    @relation("MessageReplies")
+  isDeletedForEveryone Boolean      @default(false)
+  createdAt            DateTime     @default(now())
+
+  attachments          Attachment[]
+}
+
+model Attachment {
+  id                   String   @id @default(uuid())
+  messageId            String
+  message              Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  fileUrl              String
+  fileType             String
+  fileSizeBytes        Int
+  encryptedKey         String
+  initializationVector String
+  createdAt            DateTime @default(now())
+}
+
+model Call {
+  id          String    @id @default(uuid())
+  chatId      String
+  chat        Chat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  initiatorId String
+  initiator   User      @relation("InitiatedCalls", fields: [initiatorId], references: [id], onDelete: Cascade)
+  type        String    @default("AUDIO")
+  roomName    String    @unique
+  status      String    @default("RINGING")
+  startedAt   DateTime  @default(now())
+  endedAt     DateTime?
+}
+
+model Report {
+  id             String   @id @default(uuid())
+  reporterId     String
+  reporter       User     @relation("ReportsSubmitted", fields: [reporterId], references: [id], onDelete: Cascade)
+  reportedUserId String
+  reportedUser   User     @relation("ReportsAgainst", fields: [reportedUserId], references: [id], onDelete: Cascade)
+  reason         String
+  status         String   @default("PENDING")
+  adminNotes     String?
+  createdAt      DateTime @default(now())
+}
+
+model PushToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  platform  String
+  createdAt DateTime @default(now())
+}
