@@ -22,7 +22,7 @@ async function mediaRoutes(fastify) {
             const filename = `${Date.now()}_${Math.random().toString(36).substring(7)}${ext}`;
             const filepath = path_1.default.join(config_1.config.localStorageDir, filename);
             await pump(data.file, fs_1.default.createWriteStream(filepath));
-            const fileUrl = `http://192.168.1.83:4000/uploads/${filename}`;
+            const fileUrl = `https://uschat.ruptyl.space/uploads/${filename}`;
             return reply.status(201).send({ fileUrl });
         }
         catch (err) {

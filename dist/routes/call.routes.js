@@ -23,6 +23,19 @@ async function callRoutes(fastify) {
                 status: 'RINGING',
             },
         });
+        // Log call start as a system CALL_LOG message
+        const msg = await client_1.prisma.message.create({
+            data: {
+                chatId: body.chatId,
+                senderId: request.user.id,
+                encryptedContent: `${body.type === 'VIDEO' ? '🎥 Video' : '📞 Voice'} Call started`,
+                messageType: 'CALL_LOG',
+            },
+            include: {
+                sender: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
+            },
+        });
+        ws_handler_1.WebSocketManager.broadcastToChat(body.chatId, request.user.id, 'NEW_MESSAGE', msg);
         const token = await livekit_service_1.LiveKitService.generateToken(roomName, request.user.id, request.user.username || 'user');
         const initiatorUser = await client_1.prisma.user.findUnique({ where: { id: request.user.id } });
         ws_handler_1.WebSocketManager.broadcastToChat(body.chatId, request.user.id, 'INCOMING_CALL', {
@@ -63,6 +76,19 @@ async function callRoutes(fastify) {
                 where: { id: callId },
                 data: { status: 'ENDED', endedAt: new Date() },
             });
+            // Log call end as a system CALL_LOG message
+            const msg = await client_1.prisma.message.create({
+                data: {
+                    chatId: call.chatId,
+                    senderId: request.user.id,
+                    encryptedContent: `${call.type === 'VIDEO' ? '🎥 Video' : '📞 Voice'} Call ended`,
+                    messageType: 'CALL_LOG',
+                },
+                include: {
+                    sender: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
+                },
+            });
+            ws_handler_1.WebSocketManager.broadcastToChat(call.chatId, request.user.id, 'NEW_MESSAGE', msg);
             ws_handler_1.WebSocketManager.broadcastToChat(call.chatId, request.user.id, 'CALL_ENDED', { callId });
             return reply.send(call);
         }

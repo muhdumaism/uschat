@@ -7,7 +7,7 @@ const auth_middleware_1 = require("../middleware/auth.middleware");
 const updateProfileSchema = zod_1.z.object({
     displayName: zod_1.z.string().min(1).max(50).optional(),
     bio: zod_1.z.string().max(250).optional(),
-    avatarUrl: zod_1.z.string().url().optional().nullable(),
+    avatarUrl: zod_1.z.string().optional().nullable(),
     disappearingDefault: zod_1.z.number().int().min(0).optional(),
 });
 const updateUsernameSchema = zod_1.z.object({
