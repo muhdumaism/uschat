@@ -126,6 +126,7 @@ model Message {
   replyTo              Message?     @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
   replies              Message[]    @relation("MessageReplies")
   isDeletedForEveryone Boolean      @default(false)
+  reactions            String       @default("[]")
   createdAt            DateTime     @default(now())
 
   attachments          Attachment[]

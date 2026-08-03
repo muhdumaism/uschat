@@ -154,4 +154,69 @@ async function messageRoutes(fastify) {
         ws_handler_1.WebSocketManager.broadcastToChat(msg.chatId, request.user.id, 'MESSAGE_DELETED', { messageId });
         return reply.send(updated);
     });
+    fastify.patch('/:messageId/edit', { preHandler: [auth_middleware_1.authenticate] }, async (request, reply) => {
+        const { messageId } = request.params;
+        const { newContent } = request.body;
+        const msg = await client_1.prisma.message.findUnique({ where: { id: messageId } });
+        if (!msg) {
+            return reply.status(404).send({ error: 'Not Found', message: 'Message not found' });
+        }
+        if (msg.senderId !== request.user.id) {
+            return reply.status(403).send({ error: 'Forbidden', message: 'Only sender can edit message' });
+        }
+        const updated = await client_1.prisma.message.update({
+            where: { id: messageId },
+            data: {
+                encryptedContent: newContent,
+            },
+            include: {
+                sender: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
+            },
+        });
+        ws_handler_1.WebSocketManager.broadcastToChat(msg.chatId, request.user.id, 'MESSAGE_EDITED', updated);
+        return reply.send(updated);
+    });
+    fastify.post('/:messageId/react', { preHandler: [auth_middleware_1.authenticate] }, async (request, reply) => {
+        const { messageId } = request.params;
+        const { emoji } = request.body;
+        const msg = await client_1.prisma.message.findUnique({ where: { id: messageId } });
+        if (!msg) {
+            return reply.status(404).send({ error: 'Not Found', message: 'Message not found' });
+        }
+        let reactionsList = [];
+        try {
+            reactionsList = JSON.parse(msg.reactions || '[]');
+        }
+        catch {
+            reactionsList = [];
+        }
+        const existingIndex = reactionsList.findIndex((r) => r.userId === request.user.id);
+        if (existingIndex > -1) {
+            if (reactionsList[existingIndex].emoji === emoji) {
+                reactionsList.splice(existingIndex, 1);
+            }
+            else {
+                reactionsList[existingIndex].emoji = emoji;
+            }
+        }
+        else {
+            reactionsList.push({
+                userId: request.user.id,
+                username: request.user.username || '',
+                emoji,
+            });
+        }
+        await client_1.prisma.message.update({
+            where: { id: messageId },
+            data: {
+                reactions: JSON.stringify(reactionsList),
+            },
+        });
+        ws_handler_1.WebSocketManager.broadcastToChat(msg.chatId, request.user.id, 'MESSAGE_REACTED', {
+            messageId,
+            chatId: msg.chatId,
+            reactions: reactionsList,
+        });
+        return reply.send({ messageId, reactions: reactionsList });
+    });
 }
