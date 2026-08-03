@@ -25,6 +25,21 @@ export async function callRoutes(fastify: FastifyInstance) {
       },
     });
 
+    // Log call start as a system CALL_LOG message
+    const msg = await prisma.message.create({
+      data: {
+        chatId: body.chatId,
+        senderId: request.user.id,
+        encryptedContent: `${body.type === 'VIDEO' ? '🎥 Video' : '📞 Voice'} Call started`,
+        messageType: 'CALL_LOG',
+      },
+      include: {
+        sender: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
+      },
+    });
+
+    WebSocketManager.broadcastToChat(body.chatId, request.user.id, 'NEW_MESSAGE', msg);
+
     const token = await LiveKitService.generateToken(
       roomName,
       request.user.id,
@@ -84,6 +99,20 @@ export async function callRoutes(fastify: FastifyInstance) {
         data: { status: 'ENDED', endedAt: new Date() },
       });
 
+      // Log call end as a system CALL_LOG message
+      const msg = await prisma.message.create({
+        data: {
+          chatId: call.chatId,
+          senderId: request.user.id,
+          encryptedContent: `${call.type === 'VIDEO' ? '🎥 Video' : '📞 Voice'} Call ended`,
+          messageType: 'CALL_LOG',
+        },
+        include: {
+          sender: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
+        },
+      });
+
+      WebSocketManager.broadcastToChat(call.chatId, request.user.id, 'NEW_MESSAGE', msg);
       WebSocketManager.broadcastToChat(call.chatId, request.user.id, 'CALL_ENDED', { callId });
 
       return reply.send(call);
