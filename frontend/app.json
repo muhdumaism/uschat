@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "USCHAT",
+    "slug": "uschat",
+    "version": "2.5.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "platforms": ["android", "ios", "web"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.uschat.app"
+    },
+    "android": {
+      "package": "com.uschat.app",
+      "versionCode": 18
+    },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}

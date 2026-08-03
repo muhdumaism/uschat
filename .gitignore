@@ -7,6 +7,7 @@ build/
 .env
 android/app/build/
 android/.gradle/
+android-sdk/
 jdk17/
 jdk17.zip
 cmdline-tools.zip
