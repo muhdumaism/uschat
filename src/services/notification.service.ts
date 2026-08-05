@@ -14,7 +14,18 @@ function initFirebase() {
     return;
   }
 
-  const saPath = path.resolve(config.firebase.serviceAccountPath);
+  let saPath = path.resolve(config.firebase.serviceAccountPath);
+  if (!fs.existsSync(saPath)) {
+    try {
+      const rootDir = path.resolve(path.join(__dirname, '../../'));
+      const files = fs.readdirSync(rootDir);
+      const candidate = files.find(file => file.includes('firebase-adminsdk') && file.endsWith('.json'));
+      if (candidate) {
+        saPath = path.join(rootDir, candidate);
+      }
+    } catch (e) {}
+  }
+
   if (!fs.existsSync(saPath)) {
     console.warn('[NotificationService] Firebase service account not found at', saPath);
     console.warn('[NotificationService] Push notifications will operate in WebSocket-only fallback mode.');
