@@ -50,7 +50,7 @@ export function buildApp() {
   app.register(fastifyRateLimit, { max: 200, timeWindow: '1 minute' });
 
   app.register(fastifyStatic, {
-    root: config.localStorageDir,
+    root: path.resolve(config.localStorageDir),
     prefix: '/uploads/',
   });
 

@@ -12,7 +12,7 @@ export const config = {
   databaseUrl: process.env.DATABASE_URL || 'postgresql://uschat:uschatpassword@localhost:5432/uschat_db?schema=public',
   redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
   storageProvider: process.env.STORAGE_PROVIDER || 'local', // 'local' | 's3' | 'r2' | 'minio'
-  localStorageDir: process.env.LOCAL_STORAGE_DIR || path.join(__dirname, '../../uploads'),
+  localStorageDir: path.resolve(process.env.LOCAL_STORAGE_DIR || path.join(__dirname, '../../uploads')),
   s3: {
     endpoint: process.env.S3_ENDPOINT,
     region: process.env.S3_REGION || 'us-east-1',
