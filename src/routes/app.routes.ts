@@ -35,7 +35,7 @@ export async function appRoutes(fastify: FastifyInstance) {
     }
 
     // Serve from the backend root folder (safe, not public!)
-    const apkPath = path.resolve(path.join(__dirname, '../../../uschat.apk'));
+    const apkPath = path.resolve(path.join(__dirname, '../../uschat.apk'));
     if (!fs.existsSync(apkPath)) {
       return reply.status(404).send({ error: 'Not Found', message: 'USCHAT APK package not found on server' });
     }
