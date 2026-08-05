@@ -6,10 +6,10 @@ export async function appRoutes(fastify: FastifyInstance) {
   // Check latest application version & metadata
   fastify.get('/version', async (_request, reply) => {
     return reply.send({
-      latestVersion: '1.0.0',
-      versionCode: 100,
+      latestVersion: '1.0.1',
+      versionCode: 101,
       downloadUrl: 'https://uschat.ruptyl.space/api/v1/app/download',
-      releaseNotes: '⚡ USCHAT v1.0.0 Initial Release:\n- Secure E2EE chats and calls\n- In-app Auto Update engine\n- Fixed call audio routing and duplicate messages',
+      releaseNotes: '⚡ USCHAT v1.0.1 Release:\n- Added Message Reactions\n- Call screen displays caller display name instead of room UUID\n- Default voice call noise suppression',
       forceUpdate: false,
     });
   });

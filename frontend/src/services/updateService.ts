@@ -11,8 +11,8 @@ export interface VersionInfo {
   forceUpdate: boolean;
 }
 
-export const CURRENT_VERSION_CODE = 100; // Starting fresh at v1.0.0
-export const CURRENT_VERSION_NAME = '1.0.0';
+export const CURRENT_VERSION_CODE = 101; // Starting fresh at v1.0.1
+export const CURRENT_VERSION_NAME = '1.0.1';
 
 export const UpdateService = {
   /**
