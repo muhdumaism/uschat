@@ -19,7 +19,7 @@ export default function RootLayout({
         <header>
           <div className="nav-container">
             <Link href="/" className="logo">
-              <div className="logo-box">U</div>
+              <img src="/uschat-trans.png" alt="USCHAT Logo" style={{ width: '38px', height: '38px', objectFit: 'contain' }} />
               <span>USCHAT</span>
             </Link>
             <nav className="nav-links">
@@ -35,7 +35,7 @@ export default function RootLayout({
         {/* Footer */}
         <footer className="footer">
           <div className="footer-content">
-            <div className="footer-logo">USCHAT SECURITY CORE v2.5</div>
+            <div className="footer-logo">USCHAT SECURITY CORE v1.0</div>
             <div className="footer-links">
               <Link href="/download">Download</Link>
               <Link href="/privacy">Privacy Policy</Link>

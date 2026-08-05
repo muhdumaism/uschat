@@ -13,27 +13,21 @@ export default function DownloadPage() {
         <h1>GET CLIENT TERMINAL APP</h1>
         <p>DOWNLOAD THE COMPILED CLIENT BINARY FOR YOUR SYSTEM NODE.</p>
 
-        <div className="download-grid">
+        <div style={{ maxWidth: '400px', margin: '40px auto 0 auto' }}>
           <div className="brutalist-card download-card">
-            <h3>ANDROID MOBILE</h3>
-            <p style={{ marginBottom: '20px', color: '#A1A1AA', fontSize: '13px' }}>APK COMPILE v2.5.0</p>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
+              <img src="/uschat-trans.png" alt="USCHAT logo" style={{ width: '80px', height: '80px', objectFit: 'contain' }} />
+            </div>
+            <h3>ANDROID MOBILE CLIENT</h3>
+            <p style={{ marginBottom: '24px', color: '#A1A1AA', fontSize: '13px', fontWeight: '700', letterSpacing: '1px' }}>
+              APK COMPILE v1.0.0 (ARM64)
+            </p>
             <button 
-              onClick={() => triggerAlert('USCHAT_2.5.0_ARM64.apk')} 
+              onClick={() => triggerAlert('USCHAT_1.0.0_ARM64.apk')} 
               className="brutalist-btn" 
               style={{ width: '100%', cursor: 'pointer' }}
             >
-              GET APK
-            </button>
-          </div>
-          <div className="brutalist-card download-card">
-            <h3>DESKTOP LINUX</h3>
-            <p style={{ marginBottom: '20px', color: '#A1A1AA', fontSize: '13px' }}>APPIMAGE COMPILE v2.5.0</p>
-            <button 
-              onClick={() => triggerAlert('USCHAT_2.5.0_x86_64.AppImage')} 
-              className="brutalist-btn secondary" 
-              style={{ width: '100%', cursor: 'pointer' }}
-            >
-              GET APPIMAGE
+              DOWNLOAD APK FILE
             </button>
           </div>
         </div>
