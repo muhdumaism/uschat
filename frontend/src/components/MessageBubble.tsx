@@ -4,11 +4,12 @@ import { Eye, Lock, CheckCheck } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 import { ChatMessage } from '../store/chatStore';
 
-interface MessageBubbleProps {
+export interface MessageBubbleProps {
   message: ChatMessage;
   isMe: boolean;
   onOpenViewOnce?: () => void;
   onOpenImage?: (uri: string) => void;
+  onLongPress?: () => void;
 }
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({
@@ -16,18 +17,23 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   isMe,
   onOpenViewOnce,
   onOpenImage,
+  onLongPress,
 }) => {
   const time = new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   if (message.viewOnce && message.isViewed) {
     return (
-      <View style={[styles.bubble, isMe ? styles.myBubble : styles.peerBubble]}>
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onLongPress={onLongPress}
+        style={[styles.bubble, isMe ? styles.myBubble : styles.peerBubble]}
+      >
         <View style={styles.viewOnceBox}>
           <Eye size={16} color={COLORS.textMuted} />
           <Text style={styles.viewOnceOpenedText}>View once photo opened</Text>
         </View>
         <Text style={styles.timeText}>{time}</Text>
-      </View>
+      </TouchableOpacity>
     );
   }
 
@@ -36,6 +42,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       <TouchableOpacity
         activeOpacity={0.8}
         onPress={onOpenViewOnce}
+        onLongPress={onLongPress}
         style={[styles.bubble, isMe ? styles.myBubble : styles.peerBubble]}
       >
         <View style={styles.viewOnceBox}>
@@ -59,11 +66,16 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const imageUri = message.decryptedText || message.encryptedContent;
 
   return (
-    <View style={[styles.bubble, isMe ? styles.myBubble : styles.peerBubble]}>
+    <TouchableOpacity
+      activeOpacity={0.95}
+      onLongPress={onLongPress}
+      style={[styles.bubble, isMe ? styles.myBubble : styles.peerBubble]}
+    >
       {isImage ? (
         <TouchableOpacity
           activeOpacity={0.9}
           onPress={() => onOpenImage && onOpenImage(imageUri)}
+          onLongPress={onLongPress}
           style={styles.imageContainer}
         >
           <Image source={{ uri: imageUri }} style={styles.attachedImage} resizeMode="cover" />
@@ -79,7 +91,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         <Text style={[styles.timeText, isMe ? styles.myTime : styles.peerTime]}>{time}</Text>
         {isMe && <CheckCheck size={12} color={COLORS.primary} style={styles.checkIcon} />}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
