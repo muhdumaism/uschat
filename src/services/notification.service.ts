@@ -18,10 +18,21 @@ function initFirebase() {
   if (!fs.existsSync(saPath)) {
     try {
       const rootDir = path.resolve(path.join(__dirname, '../../'));
-      const files = fs.readdirSync(rootDir);
-      const candidate = files.find(file => file.includes('firebase-adminsdk') && file.endsWith('.json'));
-      if (candidate) {
-        saPath = path.join(rootDir, candidate);
+      const searchDirs = [
+        rootDir,
+        path.join(rootDir, 'backend'),
+        path.join(rootDir, '../'),
+      ];
+
+      for (const dir of searchDirs) {
+        if (fs.existsSync(dir)) {
+          const files = fs.readdirSync(dir);
+          const candidate = files.find(file => file.includes('firebase-adminsdk') && file.endsWith('.json'));
+          if (candidate) {
+            saPath = path.join(dir, candidate);
+            break;
+          }
+        }
       }
     } catch (e) {}
   }
