@@ -36,7 +36,13 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
     const connectToRoom = async () => {
       try {
         const { Room, RoomEvent, AudioSession } = require('@livekit/react-native');
-        room = new Room();
+        room = new Room({
+          audioCaptureDefaults: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
         roomRef.current = room;
 
         room.on(RoomEvent.Disconnected, () => {
@@ -130,7 +136,7 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const peerName = activeCall.roomName.includes('_') ? activeCall.roomName.split('_')[2] : 'Peer';
+  const peerName = activeCall.peerName || (activeCall.roomName.includes('_') ? activeCall.roomName.split('_')[2] : 'Peer');
   const peerInitials = peerName.substring(0, 2).toUpperCase();
 
   return (

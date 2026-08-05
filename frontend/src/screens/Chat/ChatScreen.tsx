@@ -13,7 +13,7 @@ import {
   Modal,
   Clipboard,
 } from 'react-native';
-import { ArrowLeft, Phone, Video, Send, Eye, ShieldCheck, Lock, Paperclip, Reply, Trash2, Copy, Edit } from 'lucide-react-native';
+import { ArrowLeft, Phone, Send, Eye, ShieldCheck, Lock, Paperclip, Reply, Trash2, Copy, Edit } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { MessageBubble } from '../../components/MessageBubble';
@@ -215,20 +215,21 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
     }
   };
 
-  const handleInitiateCall = async (type: 'AUDIO' | 'VIDEO') => {
+  const handleInitiateCall = async () => {
     try {
       await requestCallPermissions();
 
-      const res = await apiClient.post('/calls/initiate', { chatId, type });
+      const res = await apiClient.post('/calls/initiate', { chatId, type: 'AUDIO' });
       startCall({
         callId: res.data.call.id,
         chatId,
         roomName: res.data.call.roomName,
         livekitToken: res.data.livekitToken,
         wsUrl: res.data.wsUrl,
-        type,
+        type: 'AUDIO',
         isMuted: false,
-        isVideoOff: type === 'AUDIO',
+        isConnected: false,
+        peerName: name,
       });
       navigation.navigate('CallScreen');
     } catch (err: any) {
@@ -270,11 +271,8 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
           <TouchableOpacity onPress={handleOpenProfile} style={styles.headerIcon}>
             <ShieldCheck size={20} color={COLORS.primary} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleInitiateCall('AUDIO')} style={styles.headerIcon}>
+          <TouchableOpacity onPress={handleInitiateCall} style={styles.headerIcon}>
             <Phone size={20} color={COLORS.textPrimary} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => handleInitiateCall('VIDEO')} style={styles.headerIcon}>
-            <Video size={20} color={COLORS.textPrimary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -310,6 +308,9 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
               if (!item.isDeletedForEveryone) {
                 setSelectedMessage(item);
               }
+            }}
+            onReactPress={async (emoji) => {
+              await reactToMessage(item.id, chatId, emoji);
             }}
           />
         )}
