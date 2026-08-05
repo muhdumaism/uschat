@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma } from '../prisma/client';
 import { authenticate } from '../middleware/auth.middleware';

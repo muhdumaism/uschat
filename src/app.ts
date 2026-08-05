@@ -7,7 +7,7 @@ import fastifyStatic from '@fastify/static';
 import fastifyMultipart from '@fastify/multipart';
 import fs from 'fs';
 import path from 'path';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { ZodError } from 'zod';
 import { config } from './config';
 import { prisma } from './prisma/client';
