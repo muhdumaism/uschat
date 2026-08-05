@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,47 +10,116 @@ import {
   Platform,
   Alert,
   StatusBar,
+  Modal,
+  Clipboard,
 } from 'react-native';
-import { ArrowLeft, Phone, Video, Send, Eye, ShieldCheck, Lock, Paperclip } from 'lucide-react-native';
+import { ArrowLeft, Phone, Video, Send, Eye, ShieldCheck, Lock, Paperclip, Reply, Trash2, Copy, Edit } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { MessageBubble } from '../../components/MessageBubble';
 import { Avatar } from '../../components/Avatar';
-import { SafetyNumberModal } from '../../components/SafetyNumberModal';
+import { UserProfileModal } from '../../components/UserProfileModal';
 import { ImageViewerModal } from '../../components/ImageViewerModal';
+import { ImagePreviewModal } from '../../components/ImagePreviewModal';
 import { requestCallPermissions } from '../../components/IncomingCallModal';
 import { COLORS } from '../../theme/colors';
 import { useChatStore } from '../../store/chatStore';
 import { useAuthStore } from '../../store/authStore';
 import { useCallStore } from '../../store/callStore';
-import { apiClient, API_BASE_URL } from '../../api/client';
+import { apiClient } from '../../api/client';
+import { API_BASE_URL } from '../../api/config';
 
 export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
   const { chatId, name, peerUsername } = route.params;
   const [inputText, setInputText] = useState('');
   const [isViewOnce, setIsViewOnce] = useState(false);
-  const [showSafetyModal, setShowSafetyModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileData, setProfileData] = useState<any>(null);
 
   // Fullscreen Image Modal State
   const [viewingImageUri, setViewingImageUri] = useState<string | null>(null);
   const [isViewingOnce, setIsViewingOnce] = useState(false);
   const [viewingMsgId, setViewingMsgId] = useState<string | null>(null);
 
-  const { messages, fetchMessages, sendMessage } = useChatStore();
+  // WhatsApp-like Image Preview / Editing Modal State
+  const [previewImageUri, setPreviewImageUri] = useState<string | null>(null);
+
+  // Message interaction States
+  const [selectedMessage, setSelectedMessage] = useState<any>(null);
+  const [replyingToMessage, setReplyingToMessage] = useState<any>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+
+  const { messages, fetchMessages, sendMessage, editMessage, deleteMessage, reactToMessage } = useChatStore();
   const currentUser = useAuthStore((s) => s.user);
   const startCall = useCallStore((s) => s.startCall);
 
-  const chatMessages = messages[chatId] || [];
+  const chatMessages = (messages[chatId] || []).filter(
+    (msg) => !msg.isDeletedForEveryone && msg.encryptedContent !== '[DELETED_MESSAGE]'
+  );
+
+  const flatListRef = useRef<FlatList>(null);
+
+  const scrollToBottom = (animated = false) => {
+    if (chatMessages.length > 0) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToEnd({ animated });
+      }, 120);
+    }
+  };
+  
+  const handleOpenProfile = async () => {
+    if (!peerUsername) {
+      setProfileData({
+        username: currentUser?.username || 'self',
+        displayName: currentUser?.displayName || 'SAVED MESSAGES',
+        bio: currentUser?.bio || 'YOUR SECURED MEMORY STORAGE CELL.',
+        avatarUrl: currentUser?.avatarUrl,
+      });
+      setShowProfileModal(true);
+      return;
+    }
+
+    try {
+      const res = await apiClient.get(`/users/by-username/${peerUsername}`);
+      setProfileData(res.data);
+      setShowProfileModal(true);
+    } catch (err) {
+      console.error('Failed to load profile:', err);
+      setProfileData({
+        username: peerUsername,
+        displayName: name,
+        bio: 'E2EE ROUTED IDENTITY CHANNEL.',
+      });
+      setShowProfileModal(true);
+    }
+  };
 
   useEffect(() => {
     fetchMessages(chatId);
   }, [chatId]);
 
+  useEffect(() => {
+    scrollToBottom(false);
+  }, [chatMessages.length]);
+
   const handleSend = async () => {
     if (!inputText.trim()) return;
     const textToSend = inputText;
     setInputText('');
-    await sendMessage(chatId, textToSend, { viewOnce: isViewOnce });
-    setIsViewOnce(false);
+    if (editingMessageId) {
+      const msgId = editingMessageId;
+      setEditingMessageId(null);
+      await editMessage(msgId, chatId, textToSend);
+    } else {
+      const options: any = { viewOnce: isViewOnce };
+      if (replyingToMessage) {
+        options.replyToId = replyingToMessage.id;
+        setReplyingToMessage(null);
+      }
+      await sendMessage(chatId, textToSend, options);
+      setIsViewOnce(false);
+      scrollToBottom(true);
+    }
   };
 
   const handlePickImage = async () => {
@@ -68,44 +137,77 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
       });
 
       if (!result.canceled && result.assets && result.assets[0]?.uri) {
-        const imageUri = result.assets[0].uri;
+        setPreviewImageUri(result.assets[0].uri);
+      }
+    } catch (err: any) {
+      console.error('Image pick error:', err);
+    }
+  };
 
-        const formData = new FormData();
-        const filename = imageUri.split('/').pop() || 'photo.jpg';
-        const match = /\.(\w+)$/.exec(filename);
-        const type = match ? `image/${match[1]}` : 'image/jpeg';
+  const handleSendImage = async (uri: string, caption?: string) => {
+    try {
+      let imageUri = uri;
 
-        formData.append('file', {
-          uri: imageUri,
-          name: filename,
-          type,
-        } as any);
+      // Compress and resize image to bypass server 1MB size limits
+      try {
+        const manipResult = await ImageManipulator.manipulateAsync(
+          imageUri,
+          [{ resize: { width: 1024 } }],
+          { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+        );
+        imageUri = manipResult.uri;
+      } catch (manipErr) {
+        console.warn('Image manipulation failed, using original image:', manipErr);
+      }
 
-        const token = useAuthStore.getState().token;
+      const formData = new FormData();
+      const filename = imageUri.split('/').pop() || 'photo.jpg';
+      const match = /\.(\w+)$/.exec(filename);
+      const type = match ? `image/${match[1]}` : 'image/jpeg';
 
-        const response = await fetch(`${API_BASE_URL}/media/upload`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: formData,
-        });
+      formData.append('file', {
+        uri: imageUri,
+        name: filename,
+        type,
+      } as any);
 
-        const rawText = await response.text();
-        let uploadRes: any;
-        try {
-          uploadRes = JSON.parse(rawText);
-        } catch {
-          Alert.alert('Upload Failed', 'Unable to upload photo to server. Please try again.');
-          return;
+      const token = useAuthStore.getState().token;
+
+      const response = await fetch(`${API_BASE_URL}/media/upload`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const rawText = await response.text();
+      let uploadRes: any;
+      try {
+        uploadRes = JSON.parse(rawText);
+      } catch (parseErr) {
+        console.error('Upload JSON parse error:', parseErr, 'Raw response:', rawText);
+        Alert.alert('Upload Failed', `Server responded with status ${response.status}. Response: ${rawText.substring(0, 150)}`);
+        return;
+      }
+
+      if (uploadRes?.fileUrl) {
+        const options: any = { viewOnce: isViewOnce, messageType: 'IMAGE' };
+        if (replyingToMessage) {
+          options.replyToId = replyingToMessage.id;
+          setReplyingToMessage(null);
+        }
+        await sendMessage(chatId, uploadRes.fileUrl, options);
+        setIsViewOnce(false);
+
+        if (caption && caption.trim()) {
+          await sendMessage(chatId, caption.trim());
         }
 
-        if (uploadRes?.fileUrl) {
-          await sendMessage(chatId, uploadRes.fileUrl, { viewOnce: isViewOnce });
-          setIsViewOnce(false);
-        } else {
-          Alert.alert('Upload Error', uploadRes?.message || 'Failed to upload photo');
-        }
+        setPreviewImageUri(null);
+        scrollToBottom(true);
+      } else {
+        Alert.alert('Upload Error', uploadRes?.message || 'Failed to upload photo');
       }
     } catch (err: any) {
       console.error('Image upload error:', err);
@@ -156,7 +258,7 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
           <ArrowLeft size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => setShowSafetyModal(true)} style={styles.headerProfile}>
+        <TouchableOpacity onPress={handleOpenProfile} style={styles.headerProfile}>
           <Avatar name={name} size={38} />
           <View style={styles.headerTitleBox}>
             <Text style={styles.headerName}>{name}</Text>
@@ -165,7 +267,7 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
         </TouchableOpacity>
 
         <View style={styles.headerActions}>
-          <TouchableOpacity onPress={() => setShowSafetyModal(true)} style={styles.headerIcon}>
+          <TouchableOpacity onPress={handleOpenProfile} style={styles.headerIcon}>
             <ShieldCheck size={20} color={COLORS.primary} />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => handleInitiateCall('AUDIO')} style={styles.headerIcon}>
@@ -178,13 +280,14 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
       </View>
 
       <View style={styles.banner}>
-        <Lock size={12} color={COLORS.accent} />
+        <ShieldCheck size={14} color={COLORS.success} />
         <Text style={styles.bannerText}>
-          Messages are End-to-End Encrypted.
+          Messages are private and secure.
         </Text>
       </View>
 
       <FlatList
+        ref={flatListRef}
         data={chatMessages}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
@@ -203,12 +306,40 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
               setIsViewingOnce(false);
               setViewingMsgId(null);
             }}
+            onLongPress={() => {
+              if (!item.isDeletedForEveryone) {
+                setSelectedMessage(item);
+              }
+            }}
           />
         )}
         contentContainerStyle={styles.listContent}
       />
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        {replyingToMessage && (
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: COLORS.card, paddingHorizontal: 16, paddingVertical: 8, borderTopWidth: 1, borderTopColor: COLORS.border }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: COLORS.primary, fontSize: 11, fontWeight: '600' }}>
+                Replying to {replyingToMessage.senderId === currentUser?.id ? 'yourself' : `@${replyingToMessage.sender?.username || 'user'}`}
+              </Text>
+              <Text style={{ color: COLORS.textMuted, fontSize: 12 }} numberOfLines={1}>
+                {replyingToMessage.decryptedText || replyingToMessage.encryptedContent}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => setReplyingToMessage(null)}>
+              <Text style={{ color: COLORS.textMuted, fontSize: 12, marginLeft: 10 }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        {editingMessageId && (
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: COLORS.card, paddingHorizontal: 16, paddingVertical: 8, borderTopWidth: 1, borderTopColor: COLORS.border }}>
+            <Text style={{ color: COLORS.primary, fontSize: 12, fontWeight: '600' }}>Editing message...</Text>
+            <TouchableOpacity onPress={() => { setEditingMessageId(null); setInputText(''); }}>
+              <Text style={{ color: COLORS.textMuted, fontSize: 12 }}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         <View style={styles.inputBarContainer}>
           <TouchableOpacity
             onPress={() => setIsViewOnce(!isViewOnce)}
@@ -218,7 +349,7 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
           </TouchableOpacity>
 
           <TextInput
-            placeholder="Encrypted Message..."
+            placeholder="Type a message..."
             placeholderTextColor={COLORS.textMuted}
             value={inputText}
             onChangeText={setInputText}
@@ -243,15 +374,125 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
         onClose={handleCloseImageViewer}
       />
 
-      {currentUser && (
-        <SafetyNumberModal
-          visible={showSafetyModal}
-          onClose={() => setShowSafetyModal(false)}
-          myUserId={currentUser.id}
-          peerUserId={peerUsername || chatId}
-          peerName={name}
-        />
-      )}
+      <UserProfileModal
+        visible={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
+        userData={profileData}
+      />
+
+      {/* Bottom Action Sheet for Message Interaction */}
+      <Modal
+        visible={!!selectedMessage}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedMessage(null)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' }}
+          onPress={() => setSelectedMessage(null)}
+        >
+          <View style={{ backgroundColor: '#121212', borderTopWidth: 3, borderTopColor: '#FFFFFF', padding: 20, paddingBottom: Platform.OS === 'ios' ? 40 : 20, borderRadius: 0 }}>
+            {/* Quick Emoji Reactions */}
+            <Text style={{ color: '#A1A1AA', fontSize: 11, fontWeight: '900', marginBottom: 12, letterSpacing: 1.5 }}>REACTIONS</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20 }}>
+              {['👍', '❤️', '😂', '😮', '😢', '🙏'].map((emoji) => (
+                <TouchableOpacity
+                  key={emoji}
+                  onPress={async () => {
+                    const msg = selectedMessage;
+                    setSelectedMessage(null);
+                    await reactToMessage(msg.id, chatId, emoji);
+                  }}
+                  style={{ width: 44, height: 44, borderRadius: 0, borderWidth: 2, borderColor: '#FFFFFF', backgroundColor: '#000000', justifyContent: 'center', alignItems: 'center' }}
+                >
+                  <Text style={{ fontSize: 22 }}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={{ height: 2, backgroundColor: '#FFFFFF', marginBottom: 16 }} />
+
+            {/* Reply */}
+            <TouchableOpacity
+              onPress={() => {
+                const msg = selectedMessage;
+                setSelectedMessage(null);
+                setReplyingToMessage(msg);
+              }}
+              style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14 }}
+            >
+              <Reply size={20} color="#FFFFFF" style={{ marginRight: 12 }} />
+              <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '900', letterSpacing: 1 }}>REPLY</Text>
+            </TouchableOpacity>
+
+            {/* Copy */}
+            {!selectedMessage?.viewOnce && (
+              <TouchableOpacity
+                onPress={() => {
+                  const msg = selectedMessage;
+                  setSelectedMessage(null);
+                  Clipboard.setString(msg.decryptedText || msg.encryptedContent);
+                  Alert.alert('COPIED', 'MESSAGE COPIED TO CLIPBOARD.');
+                }}
+                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14 }}
+              >
+                <Copy size={20} color="#FFFFFF" style={{ marginRight: 12 }} />
+                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '900', letterSpacing: 1 }}>COPY TEXT</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Edit (Only if user's own message and not image/view-once) */}
+            {selectedMessage?.senderId === currentUser?.id && selectedMessage?.messageType !== 'IMAGE' && !selectedMessage?.viewOnce && (
+              <TouchableOpacity
+                onPress={() => {
+                  const msg = selectedMessage;
+                  setSelectedMessage(null);
+                  setEditingMessageId(msg.id);
+                  setInputText(msg.decryptedText || msg.encryptedContent);
+                }}
+                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14 }}
+              >
+                <Edit size={20} color="#FFFFFF" style={{ marginRight: 12 }} />
+                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '900', letterSpacing: 1 }}>EDIT MESSAGE</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Delete (Only if user's own message) */}
+            {selectedMessage?.senderId === currentUser?.id && (
+              <TouchableOpacity
+                onPress={() => {
+                  const msg = selectedMessage;
+                  setSelectedMessage(null);
+                  Alert.alert(
+                    'DELETE MESSAGE',
+                    'ARE YOU SURE YOU WANT TO DELETE THIS MESSAGE FOR EVERYONE?',
+                    [
+                      { text: 'CANCEL', style: 'cancel' },
+                      {
+                        text: 'DELETE',
+                        style: 'destructive',
+                        onPress: () => deleteMessage(msg.id, chatId),
+                      },
+                    ]
+                  );
+                }}
+                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14 }}
+              >
+                <Trash2 size={20} color="#FF0000" style={{ marginRight: 12 }} />
+                <Text style={{ color: '#FF0000', fontSize: 15, fontWeight: '900', letterSpacing: 1 }}>DELETE FOR EVERYONE</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      <ImagePreviewModal
+        visible={!!previewImageUri}
+        imageUri={previewImageUri}
+        onClose={() => setPreviewImageUri(null)}
+        onSend={handleSendImage}
+      />
     </View>
   );
 };
@@ -259,102 +500,148 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#000000',
   },
   statusBarSpacer: {
     height: Platform.OS === 'android' ? 52 : 28,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#121212',
+    borderBottomWidth: 2,
+    borderColor: '#FFFFFF',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    paddingVertical: 14,
+    backgroundColor: '#121212',
+    borderBottomWidth: 3,
+    borderColor: '#FFFFFF',
   },
   backBtn: {
-    padding: 6,
+    width: 38,
+    height: 38,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerProfile: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 8,
+    marginLeft: 12,
   },
   headerTitleBox: {
-    marginLeft: 10,
+    marginLeft: 12,
   },
   headerName: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '700',
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '900',
+    letterSpacing: 0.5,
   },
   headerHandle: {
-    color: COLORS.secondary,
+    color: '#A1A1AA',
     fontSize: 12,
+    fontWeight: '700',
   },
   headerActions: {
     flexDirection: 'row',
   },
   headerIcon: {
-    padding: 8,
-    marginLeft: 4,
+    width: 36,
+    height: 36,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 6,
   },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+    backgroundColor: '#121212',
     paddingVertical: 6,
     paddingHorizontal: 16,
+    borderBottomWidth: 2,
+    borderColor: '#FFFFFF',
   },
   bannerText: {
-    color: COLORS.accent,
-    fontSize: 11,
+    color: '#FFFFFF',
+    fontSize: 10,
     marginLeft: 6,
-    fontWeight: '500',
+    fontWeight: '900',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
   listContent: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 16,
   },
   inputBarContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    backgroundColor: COLORS.secondaryBackground,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: '#121212',
+    borderTopWidth: 3,
+    borderTopColor: '#FFFFFF',
   },
   viewOnceBtn: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: COLORS.card,
-    marginRight: 6,
+    width: 38,
+    height: 38,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    borderRadius: 0,
+    backgroundColor: '#000000',
+    marginRight: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   viewOnceActive: {
-    borderColor: COLORS.primary,
-    borderWidth: 1,
+    backgroundColor: COLORS.primary,
   },
   textInput: {
     flex: 1,
-    color: '#FFF',
-    fontSize: 15,
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
     maxHeight: 100,
     paddingHorizontal: 12,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    borderRadius: 0,
+    backgroundColor: '#000000',
+    height: 38,
   },
   attachBtn: {
-    padding: 8,
-  },
-  sendBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.primary,
+    width: 38,
+    height: 38,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    borderRadius: 0,
+    backgroundColor: '#000000',
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 6,
+    marginLeft: 8,
+  },
+  sendBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 0,
+    backgroundColor: COLORS.primary,
+    borderColor: '#FFFFFF',
+    borderWidth: 2.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+    shadowColor: '#FFFFFF',
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 3,
   },
 });
