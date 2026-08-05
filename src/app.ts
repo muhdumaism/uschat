@@ -91,31 +91,5 @@ export function buildApp() {
     return { status: 'healthy', timestamp: new Date(), version: '1.0.0' };
   });
 
-  // Serve static Brutalist website files
-  app.get('/', async (request, reply) => {
-    const html = fs.readFileSync(path.join(__dirname, '../website/index.html'), 'utf8');
-    reply.type('text/html').send(html);
-  });
-
-  app.get('/privacy', async (request, reply) => {
-    const html = fs.readFileSync(path.join(__dirname, '../website/privacy.html'), 'utf8');
-    reply.type('text/html').send(html);
-  });
-
-  app.get('/terms', async (request, reply) => {
-    const html = fs.readFileSync(path.join(__dirname, '../website/terms.html'), 'utf8');
-    reply.type('text/html').send(html);
-  });
-
-  app.get('/download', async (request, reply) => {
-    const html = fs.readFileSync(path.join(__dirname, '../website/download.html'), 'utf8');
-    reply.type('text/html').send(html);
-  });
-
-  app.get('/website/style.css', async (request, reply) => {
-    const css = fs.readFileSync(path.join(__dirname, '../website/style.css'), 'utf8');
-    reply.type('text/css').send(css);
-  });
-
   return app;
 }
