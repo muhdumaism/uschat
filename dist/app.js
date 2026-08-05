@@ -12,6 +12,7 @@ const rate_limit_1 = __importDefault(require("@fastify/rate-limit"));
 const static_1 = __importDefault(require("@fastify/static"));
 const multipart_1 = __importDefault(require("@fastify/multipart"));
 const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const zod_1 = require("zod");
 const config_1 = require("./config");
@@ -86,6 +87,27 @@ function buildApp() {
     });
     app.get('/health', async () => {
         return { status: 'healthy', timestamp: new Date(), version: '1.0.0' };
+    });
+    // Serve static Brutalist website files
+    app.get('/', async (request, reply) => {
+        const html = fs_1.default.readFileSync(path_1.default.join(__dirname, '../website/index.html'), 'utf8');
+        reply.type('text/html').send(html);
+    });
+    app.get('/privacy', async (request, reply) => {
+        const html = fs_1.default.readFileSync(path_1.default.join(__dirname, '../website/privacy.html'), 'utf8');
+        reply.type('text/html').send(html);
+    });
+    app.get('/terms', async (request, reply) => {
+        const html = fs_1.default.readFileSync(path_1.default.join(__dirname, '../website/terms.html'), 'utf8');
+        reply.type('text/html').send(html);
+    });
+    app.get('/download', async (request, reply) => {
+        const html = fs_1.default.readFileSync(path_1.default.join(__dirname, '../website/download.html'), 'utf8');
+        reply.type('text/html').send(html);
+    });
+    app.get('/website/style.css', async (request, reply) => {
+        const css = fs_1.default.readFileSync(path_1.default.join(__dirname, '../website/style.css'), 'utf8');
+        reply.type('text/css').send(css);
     });
     return app;
 }
