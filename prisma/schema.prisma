@@ -170,10 +170,15 @@ model Report {
 }
 
 model PushToken {
-  id        String   @id @default(uuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  token     String   @unique
-  platform  String
-  createdAt DateTime @default(now())
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token      String   @unique
+  platform   String   @default("android")
+  deviceId   String?
+  isValid    Boolean  @default(true)
+  lastUsedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
 }

@@ -6,6 +6,7 @@ interface ConnectedClient {
   userId: string;
   deviceId?: string;
   ws: WebSocket;
+  activeChatId?: string; // which chat the user currently has open
 }
 
 export class WebSocketManager {
@@ -61,6 +62,27 @@ export class WebSocketManager {
 
   public static isUserOnline(userId: string): boolean {
     return this.connections.has(userId);
+  }
+
+  /**
+   * Check if user has a specific chat open (for notification suppression)
+   */
+  public static isUserViewingChat(userId: string, chatId: string): boolean {
+    const conns = this.connections.get(userId);
+    if (!conns) return false;
+    return conns.some((c) => c.activeChatId === chatId);
+  }
+
+  /**
+   * Set the active chat for a user connection
+   */
+  public static setUserActiveChat(userId: string, ws: WebSocket, chatId: string | null) {
+    const conns = this.connections.get(userId);
+    if (!conns) return;
+    const conn = conns.find((c) => c.ws === ws);
+    if (conn) {
+      conn.activeChatId = chatId || undefined;
+    }
   }
 
   private static broadcastUserStatus(userId: string, isOnline: boolean) {
@@ -123,6 +145,15 @@ export function registerWebSocketRoutes(fastify: FastifyInstance) {
                 userId: decoded.id,
                 readAt: new Date(),
               });
+              break;
+
+            // Track which chat the user has open (for notification suppression)
+            case 'CHAT_OPENED':
+              WebSocketManager.setUserActiveChat(decoded.id, socket, payload.chatId);
+              break;
+
+            case 'CHAT_CLOSED':
+              WebSocketManager.setUserActiveChat(decoded.id, socket, null);
               break;
 
             default:

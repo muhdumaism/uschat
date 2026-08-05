@@ -24,6 +24,7 @@
     "dotenv": "^16.4.5",
     "fastify": "^4.26.0",
     "fastify-plugin": "^4.5.1",
+    "firebase-admin": "^14.2.0",
     "ioredis": "^5.3.2",
     "livekit-server-sdk": "^2.1.0",
     "multer": "^1.4.5-lts.1",

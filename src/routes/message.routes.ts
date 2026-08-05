@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../prisma/client';
 import { authenticate } from '../middleware/auth.middleware';
 import { WebSocketManager } from '../websocket/ws.handler';
+import { NotificationService } from '../services/notification.service';
 
 const sendMessageSchema = z.object({
   chatId: z.string(),
@@ -111,6 +112,17 @@ export async function messageRoutes(fastify: FastifyInstance) {
     });
 
     WebSocketManager.broadcastToChat(body.chatId, request.user.id, 'NEW_MESSAGE', message);
+
+    // Send FCM push notification to offline recipients
+    const senderName = message.sender?.displayName || message.sender?.username || 'Someone';
+    NotificationService.sendMessageNotification(
+      body.chatId,
+      request.user.id,
+      senderName,
+      body.encryptedContent,
+      body.messageType,
+      message.sender?.avatarUrl,
+    );
 
     // Auto Bot Response if sending to @uschat_bot
     const chatMembers = await prisma.chatMember.findMany({

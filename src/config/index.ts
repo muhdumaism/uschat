@@ -33,4 +33,7 @@ export const config = {
     from: process.env.SMTP_FROM || 'USCHAT Security <noreply@uschat.app>',
   },
   corsOrigins: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : ['*'],
+  firebase: {
+    serviceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT || './firebase-service-account.json',
+  },
 };
