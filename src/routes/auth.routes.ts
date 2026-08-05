@@ -6,14 +6,14 @@ import { authenticate } from '../middleware/auth.middleware';
 
 const registerSchema = z.object({
   email: z.string().email(),
-  username: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_]+$/, 'Username must be alphanumeric or underscore'),
-  password: z.string().min(8),
-  displayName: z.string().min(1).max(50),
+  username: z.string().min(1),
+  password: z.string().min(6),
+  displayName: z.string().min(1),
   deviceName: z.string().optional().default('Mobile Device'),
 });
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  email: z.string().min(1),
   password: z.string(),
   deviceName: z.string().optional().default('Mobile Device'),
 });
@@ -23,28 +23,39 @@ export async function authRoutes(fastify: FastifyInstance) {
   fastify.post('/register', async (request, reply) => {
     const body = registerSchema.parse(request.body);
 
-    const existingUser = await prisma.user.findFirst({
-      where: {
-        OR: [{ email: body.email.toLowerCase() }, { username: body.username.toLowerCase() }],
-      },
-    });
-
-    if (existingUser) {
-      if (existingUser.email === body.email.toLowerCase()) {
-        return reply.status(400).send({ error: 'Conflict', message: 'Email is already registered' });
-      }
-      return reply.status(400).send({ error: 'Conflict', message: 'Username is already taken' });
+    const cleanEmail = body.email.trim().toLowerCase();
+    let cleanUsername = body.username.trim().toLowerCase().replace(/[^a-zA-Z0-9_]/g, '_');
+    if (cleanUsername.length < 3) {
+      cleanUsername = `user_${Math.floor(1000 + Math.random() * 9000)}`;
     }
 
-    const passwordHash = await bcrypt.hash(body.password, 12);
+    const existingEmail = await prisma.user.findUnique({
+      where: { email: cleanEmail },
+    });
+
+    if (existingEmail) {
+      return reply.status(400).send({ error: 'Conflict', message: 'Email is already registered. Please log in instead.' });
+    }
+
+    // Auto-resolve username collisions if taken
+    let finalUsername = cleanUsername;
+    const existingUsername = await prisma.user.findUnique({
+      where: { username: finalUsername },
+    });
+
+    if (existingUsername) {
+      finalUsername = `${cleanUsername}_${Math.floor(100 + Math.random() * 900)}`;
+    }
+
+    const passwordHash = await bcrypt.hash(body.password, 10);
     const verificationToken = Math.random().toString(36).substring(2) + Date.now().toString(36);
 
     const user = await prisma.user.create({
       data: {
-        email: body.email.toLowerCase(),
-        username: body.username.toLowerCase(),
+        email: cleanEmail,
+        username: finalUsername,
         passwordHash,
-        displayName: body.displayName,
+        displayName: body.displayName.trim() || finalUsername,
         verificationToken,
       },
     });
@@ -97,12 +108,18 @@ export async function authRoutes(fastify: FastifyInstance) {
     });
   });
 
-  // Login
+  // Login (supports Username or Email)
   fastify.post('/login', async (request, reply) => {
     const body = loginSchema.parse(request.body);
+    const identifier = body.email.trim().toLowerCase();
 
-    const user = await prisma.user.findUnique({
-      where: { email: body.email.toLowerCase() },
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: identifier },
+          { username: identifier },
+        ],
+      },
     });
 
     if (!user) {
