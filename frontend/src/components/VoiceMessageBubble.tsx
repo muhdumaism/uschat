@@ -111,7 +111,7 @@ export const VoiceMessageBubble: React.FC<VoiceMessageBubbleProps> = ({
 
     const { sound } = await Audio.Sound.createAsync(
       { uri: uriToPlay },
-      { shouldPlay: false, rate: playbackSpeed, shouldCorrectPitch: true },
+      { shouldPlay: false, rate: playbackSpeed, shouldCorrectPitch: true, isLooping: false },
       onPlaybackStatusUpdate
     );
     soundRef.current = sound;
@@ -130,7 +130,9 @@ export const VoiceMessageBubble: React.FC<VoiceMessageBubbleProps> = ({
       if (status.didJustFinish) {
         setIsPlaying(false);
         setPositionMillis(0);
-        soundRef.current?.setPositionAsync(0);
+        try {
+          soundRef.current?.setStatusAsync({ shouldPlay: false, positionMillis: 0 });
+        } catch (err) {}
       }
     } else if (status.error) {
       console.warn(`Playback status error: ${status.error}`);
