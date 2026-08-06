@@ -329,6 +329,7 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
       <FlatList
         ref={flatListRef}
         data={chatMessages}
+        style={{ flex: 1 }}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <MessageBubble
@@ -634,7 +635,8 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingTop: 16,
+    paddingBottom: 32,
   },
   inputBarContainer: {
     flexDirection: 'row',
