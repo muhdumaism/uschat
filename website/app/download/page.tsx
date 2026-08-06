@@ -20,7 +20,7 @@ export default function DownloadPage() {
             </div>
             <h3>ANDROID MOBILE CLIENT</h3>
             <p style={{ marginBottom: '24px', color: '#A1A1AA', fontSize: '13px', fontWeight: '700', letterSpacing: '1px' }}>
-              APK COMPILE v1.0.8 (ARM64/DEBUG)
+              APK COMPILE v1.0.9 (ARM64/DEBUG)
             </p>
             <a 
               href="https://uschat.ruptyl.space/uploads/uschat.apk"

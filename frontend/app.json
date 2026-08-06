@@ -2,7 +2,7 @@
   "expo": {
     "name": "USCHAT",
     "slug": "uschat",
-    "version": "1.0.8",
+    "version": "1.0.9",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "platforms": ["android", "ios", "web"],
@@ -16,7 +16,7 @@
     },
     "android": {
       "package": "com.uschat.app",
-      "versionCode": 18,
+      "versionCode": 19,
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#000000"

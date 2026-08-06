@@ -14,8 +14,8 @@ export interface VersionInfo {
   forceUpdate: boolean;
 }
 
-export const CURRENT_VERSION_CODE = 108;
-export const CURRENT_VERSION_NAME = '1.0.8';
+export const CURRENT_VERSION_CODE = 109;
+export const CURRENT_VERSION_NAME = '1.0.9';
 
 export interface DownloadProgressInfo {
   percent: number;
