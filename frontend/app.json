@@ -2,7 +2,7 @@
   "expo": {
     "name": "USCHAT",
     "slug": "uschat",
-    "version": "2.5.0",
+    "version": "1.0.8",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "platforms": ["android", "ios", "web"],

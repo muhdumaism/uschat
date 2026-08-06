@@ -1,6 +1,6 @@
 {
   "name": "uschat-frontend",
-  "version": "2.5.0",
+  "version": "1.0.8",
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
