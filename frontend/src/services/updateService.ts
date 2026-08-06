@@ -1,6 +1,7 @@
-import { Platform, Linking } from 'react-native';
+import { Platform, Linking, NativeModules } from 'react-native';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system';
 import { API_BASE_URL } from '../api/config';
 
 export interface VersionInfo {
@@ -34,19 +35,58 @@ export const UpdateService = {
   },
 
   /**
-   * Trigger native APK download and installation prompt via Linking with secure query token
+   * Download APK to local cache reporting progress, then launch native installer activity.
    */
   downloadAndInstallApk: async (
     downloadUrl: string,
-    _onProgress?: (percent: number) => void
+    onProgress?: (percent: number) => void
   ): Promise<boolean> => {
     try {
       const token = await AsyncStorage.getItem('@uschat/token');
       const secureUrl = token ? `${downloadUrl}?token=${token}` : downloadUrl;
-      await Linking.openURL(secureUrl);
-      return true;
+      
+      const localPath = `${FileSystem.cacheDirectory}uschat_update.apk`;
+      console.log('[UpdateService] Downloading APK to local directory:', localPath);
+
+      // Clean up old update file if exists
+      try {
+        const fileInfo = await FileSystem.getInfoAsync(localPath);
+        if (fileInfo.exists) {
+          await FileSystem.deleteAsync(localPath, { idempotent: true });
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      const downloadResumable = FileSystem.createDownloadResumable(
+        secureUrl,
+        localPath,
+        {},
+        (downloadProgress) => {
+          const progress = downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite;
+          if (onProgress) {
+            onProgress(Math.round(progress * 100));
+          }
+        }
+      );
+
+      const result = await downloadResumable.downloadAsync();
+      if (!result || !result.uri) {
+        throw new Error('Local file download failed');
+      }
+
+      console.log('[UpdateService] Download completed. Launching native installer...');
+
+      if (Platform.OS === 'android' && NativeModules.USChatModule) {
+        // Remove file:// prefix to obtain absolute file system path
+        const absolutePath = result.uri.replace('file://', '');
+        await NativeModules.USChatModule.installApk(absolutePath);
+        return true;
+      }
+
+      return false;
     } catch (err: any) {
-      console.error('[UpdateService] Failed to open APK download link:', err.message);
+      console.error('[UpdateService] Failed to download or install APK:', err.message);
       return false;
     }
   },

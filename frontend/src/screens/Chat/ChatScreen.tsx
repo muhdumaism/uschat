@@ -78,7 +78,8 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
     if (chatMessages.length > 0) {
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated });
-      }, 120);
+        hasInitialScroll.current = true;
+      }, 150);
     }
   };
   
@@ -135,9 +136,11 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
   useEffect(() => {
     if (chatMessages.length > 0) {
       WebSocketClient.send('READ_RECEIPT', { chatId });
-    }
-    if (hasInitialScroll.current) {
-      scrollToBottom(true);
+      if (hasInitialScroll.current) {
+        scrollToBottom(true);
+      } else {
+        scrollToBottom(false);
+      }
     }
   }, [chatMessages.length]);
 
@@ -363,8 +366,7 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
         contentContainerStyle={styles.listContent}
         onContentSizeChange={() => {
           if (!hasInitialScroll.current && chatMessages.length > 0) {
-            flatListRef.current?.scrollToEnd({ animated: false });
-            hasInitialScroll.current = true;
+            scrollToBottom(false);
           }
         }}
       />

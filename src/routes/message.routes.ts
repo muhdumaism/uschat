@@ -51,6 +51,9 @@ export async function messageRoutes(fastify: FastifyInstance) {
             senderId: true,
             encryptedContent: true,
             messageType: true,
+            sender: {
+              select: { id: true, username: true, displayName: true, avatarUrl: true },
+            },
           },
         },
       },
@@ -103,6 +106,17 @@ export async function messageRoutes(fastify: FastifyInstance) {
       include: {
         sender: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
         attachments: true,
+        replyTo: {
+          select: {
+            id: true,
+            senderId: true,
+            encryptedContent: true,
+            messageType: true,
+            sender: {
+              select: { id: true, username: true, displayName: true, avatarUrl: true },
+            },
+          },
+        },
       },
     });
 

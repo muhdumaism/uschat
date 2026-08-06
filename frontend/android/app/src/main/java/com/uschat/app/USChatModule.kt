@@ -1,6 +1,7 @@
 package com.uschat.app
 
 import android.content.Context
+import android.content.Intent
 import android.util.Log
 import com.facebook.react.bridge.*
 import com.facebook.react.modules.core.DeviceEventManagerModule
@@ -169,6 +170,31 @@ class USChatModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
             promise.resolve(chatId)
         } else {
             promise.resolve(null)
+        }
+    }
+
+    @ReactMethod
+    fun installApk(filePath: String, promise: Promise) {
+        val context = reactApplicationContext
+        val file = java.io.File(filePath)
+        if (!file.exists()) {
+            promise.reject("FILE_NOT_FOUND", "APK file does not exist at path: $filePath")
+            return
+        }
+
+        try {
+            val authority = "${context.packageName}.provider"
+            val apkUri = androidx.core.content.FileProvider.getUriForFile(context, authority, file)
+            
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(apkUri, "application/vnd.android.package-archive")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+            }
+            context.startActivity(intent)
+            promise.resolve(true)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error launching package installer", e)
+            promise.reject("INSTALL_FAILED", e.message)
         }
     }
 
