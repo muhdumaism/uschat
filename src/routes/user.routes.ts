@@ -107,7 +107,10 @@ export async function userRoutes(fastify: FastifyInstance) {
 
     const users = await prisma.user.findMany({
       where: {
-        username: { contains: queryClean },
+        OR: [
+          { username: { contains: queryClean } },
+          { displayName: { contains: queryClean } },
+        ],
         id: { not: request.user.id },
       },
       select: {

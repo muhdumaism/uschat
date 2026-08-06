@@ -96,7 +96,10 @@ async function userRoutes(fastify) {
         const queryClean = q.replace(/^@/, '').toLowerCase();
         const users = await client_1.prisma.user.findMany({
             where: {
-                username: { contains: queryClean },
+                OR: [
+                    { username: { contains: queryClean } },
+                    { displayName: { contains: queryClean } },
+                ],
                 id: { not: request.user.id },
             },
             select: {
