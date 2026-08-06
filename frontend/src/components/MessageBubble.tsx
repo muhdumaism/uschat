@@ -1,10 +1,43 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Animated, Vibration } from 'react-native';
 import { Eye, Lock, CheckCheck, Reply } from 'lucide-react-native';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { COLORS } from '../theme/colors';
 import { ChatMessage } from '../store/chatStore';
 import { VoiceMessageBubble } from './VoiceMessageBubble';
+import { MediaCacheService } from '../services/mediaCacheService';
+
+const CachedImage: React.FC<{ uri: string; style: any; blurHash?: string | null }> = ({ uri, style, blurHash }) => {
+  const [sourceUri, setSourceUri] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const resolveUri = async () => {
+      const cached = await MediaCacheService.getCachedUri(uri);
+      if (isMounted) {
+        setSourceUri(cached);
+      }
+    };
+    resolveUri();
+    return () => { isMounted = false; };
+  }, [uri]);
+
+  if (!sourceUri) {
+    if (blurHash) {
+      return (
+        <Image
+          source={{ uri: blurHash }}
+          style={style}
+          blurRadius={12}
+          resizeMode="cover"
+        />
+      );
+    }
+    return <View style={[style, { backgroundColor: 'rgba(255, 255, 255, 0.05)' }]} />;
+  }
+
+  return <Image source={{ uri: sourceUri }} style={style} resizeMode="cover" />;
+};
 
 export interface MessageBubbleProps {
   message: ChatMessage;
@@ -69,7 +102,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const renderReactions = () => {
     if (!message.reactions || message.reactions.length === 0) return null;
 
-    // Group reactions by emoji character
     const grouped: Record<string, number> = {};
     message.reactions.forEach((r) => {
       grouped[r.emoji] = (grouped[r.emoji] || 0) + 1;
@@ -207,7 +239,11 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               onLongPress={onLongPress}
               style={styles.imageContainer}
             >
-              <Image source={{ uri: imageUri }} style={styles.attachedImage} resizeMode="cover" />
+              <CachedImage
+                uri={message.attachments?.[0]?.thumbnailUrl || imageUri}
+                style={styles.attachedImage}
+                blurHash={message.attachments?.[0]?.blurHash}
+              />
             </TouchableOpacity>
           ) : (
             <Text style={[styles.messageText, isMe ? styles.myText : styles.peerText]}>

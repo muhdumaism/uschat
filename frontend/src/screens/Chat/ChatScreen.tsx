@@ -276,7 +276,22 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
           duration: durationSecs || 1,
           waveform: waveformData.length > 0 ? waveformData : [0.15, 0.2, 0.15],
         });
-        await sendMessage(chatId, payloadString, { messageType: 'VOICE' } as any);
+        const options: any = {
+          messageType: 'VOICE',
+          attachments: [{
+            fileUrl: uploadRes.fileUrl,
+            fileType: uploadRes.fileType || 'audio/mp4',
+            fileSizeBytes: uploadRes.fileSizeBytes || 0,
+            encryptedKey: '',
+            initializationVector: '',
+            width: null,
+            height: null,
+            duration: uploadRes.duration || durationSecs || 1,
+            thumbnailUrl: null,
+            blurHash: null,
+          }]
+        };
+        await sendMessage(chatId, payloadString, options);
       } else {
         Alert.alert('Upload Error', uploadRes?.message || 'Failed to sync voice message to server.');
       }
@@ -424,55 +439,35 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
         return null;
       }
 
-      if (info.size > uploadLimits.image) {
-        const currentSizeMb = (info.size / (1024 * 1024)).toFixed(2);
-        const limitSizeMb = (uploadLimits.image / (1024 * 1024)).toFixed(0);
-        return new Promise((resolve) => {
-          Alert.alert(
-            'Oversized Image',
-            `This image exceeds the ${limitSizeMb} MB upload limit (Current: ${currentSizeMb} MB).`,
-            [
-              {
-                text: 'Choose Another',
-                style: 'cancel',
-                onPress: () => resolve(null),
-              },
-              {
-                text: 'Compress & Send',
-                onPress: async () => {
-                  try {
-                    const result = await ImageManipulator.manipulateAsync(
-                      uri,
-                      [{ resize: { width: 1200 } }],
-                      { compress: 0.65, format: ImageManipulator.SaveFormat.JPEG }
-                    );
-                    const compInfo = await FileSystem.getInfoAsync(result.uri);
-                    if (compInfo.exists && compInfo.size <= uploadLimits.image) {
-                      resolve(result.uri);
-                    } else {
-                      const result2 = await ImageManipulator.manipulateAsync(
-                        result.uri,
-                        [{ resize: { width: 800 } }],
-                        { compress: 0.45, format: ImageManipulator.SaveFormat.JPEG }
-                      );
-                      resolve(result2.uri);
-                    }
-                  } catch (compErr) {
-                    console.error('Image compression error:', compErr);
-                    Alert.alert('Error', 'Failed to compress the selected image.');
-                    resolve(null);
-                  }
-                },
-              },
-            ]
-          );
-        });
+      console.log('[Media] Compressing image to optimize storage:', uri, 'Size:', ((info as any).size / 1024).toFixed(0), 'KB');
+      
+      const compressedResult = await ImageManipulator.manipulateAsync(
+        uri,
+        [{ resize: { width: 1600 } }],
+        { compress: 0.8, format: ImageManipulator.SaveFormat.WEBP }
+      );
+
+      const compInfo = await FileSystem.getInfoAsync(compressedResult.uri);
+      console.log('[Media] WebP compressed size:', ((compInfo as any).size / 1024).toFixed(0), 'KB');
+
+      if ((compInfo as any).size > uploadLimits.image) {
+        const secondResult = await ImageManipulator.manipulateAsync(
+          compressedResult.uri,
+          [{ resize: { width: 1000 } }],
+          { compress: 0.5, format: ImageManipulator.SaveFormat.WEBP }
+        );
+        const compInfo2 = await FileSystem.getInfoAsync(secondResult.uri);
+        if ((compInfo2 as any).size > uploadLimits.image) {
+          Alert.alert('Oversized Image', 'Image is too large and cannot be compressed below the limit.');
+          return null;
+        }
+        return secondResult.uri;
       }
+
+      return compressedResult.uri;
+    } catch (err: any) {
+      console.error('[Media] Image compression failed:', err.message);
       return uri;
-    } catch (err) {
-      console.error('Validation error:', err);
-      Alert.alert('Validation Error', 'Failed to inspect file properties.');
-      return null;
     }
   };
 
@@ -565,7 +560,22 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
             setUploadState('idle');
             setUploadProgress(null);
 
-            const options: any = { viewOnce: isViewOnce, messageType: 'IMAGE' };
+            const options: any = {
+              viewOnce: isViewOnce,
+              messageType: 'IMAGE',
+              attachments: [{
+                fileUrl: res.fileUrl,
+                fileType: res.fileType || 'image/webp',
+                fileSizeBytes: res.fileSizeBytes || 0,
+                encryptedKey: '',
+                initializationVector: '',
+                width: res.width,
+                height: res.height,
+                duration: res.duration,
+                thumbnailUrl: res.thumbnailUrl,
+                blurHash: res.blurHash,
+              }]
+            };
             if (replyingToMessage) {
               options.replyToId = replyingToMessage.id;
               setReplyingToMessage(null);

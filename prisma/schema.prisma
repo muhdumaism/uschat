@@ -139,6 +139,11 @@ model Attachment {
   fileSizeBytes        Int
   encryptedKey         String
   initializationVector String
+  width                Int?
+  height               Int?
+  duration             Float?
+  thumbnailUrl         String?
+  blurHash             String?
   createdAt            DateTime @default(now())
 }
 

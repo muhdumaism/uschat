@@ -5,6 +5,7 @@ import { pipeline } from 'stream';
 import { promisify } from 'util';
 import { config } from '../config';
 import { authenticate } from '../middleware/auth.middleware';
+import { MediaService } from '../services/media.service';
 
 const pump = promisify(pipeline);
 
@@ -42,8 +43,9 @@ export async function mediaRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const fileUrl = `https://uschat.ruptyl.space/uploads/${filename}`;
-      return reply.status(201).send({ fileUrl });
+      // Process, compress, generate thumbnails and upload to destination storage provider
+      const mediaResult = await MediaService.processAndStoreMedia(filepath, data.filename, mime);
+      return reply.status(201).send(mediaResult);
     } catch (err: any) {
       request.log.error('Media upload error:', err);
       return reply.status(500).send({ error: 'Upload Failed', message: err.message });

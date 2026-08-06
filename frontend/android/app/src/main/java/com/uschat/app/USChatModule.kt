@@ -198,7 +198,7 @@ class USChatModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
     }
 
     @ReactMethod
-    fun installApk(filePath: String, promise: Promise) {
+    fun installApk(filePath: String, expectedSha256: String, promise: Promise) {
         val context = reactApplicationContext
         val file = java.io.File(filePath)
         if (!file.exists()) {
@@ -207,12 +207,69 @@ class USChatModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
         }
 
         try {
+            // 1. Verify SHA-256 Checksum natively
+            if (expectedSha256.isNotEmpty()) {
+                val computedHash = getFileSha256(file)
+                if (!computedHash.equals(expectedSha256, ignoreCase = true)) {
+                    Log.w(TAG, "SHA-256 mismatch! Computed: $computedHash, Expected: $expectedSha256")
+                    promise.reject("CHECKSUM_MISMATCH", "APK checksum verification failed. The downloaded file might be corrupted.")
+                    return
+                }
+                Log.d(TAG, "SHA-256 checksum matched successfully: $computedHash")
+            }
+
+            // 2. Unknown Sources Permission check for Android Oreo (8.0) and above
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                if (!context.packageManager.canRequestPackageInstalls()) {
+                    Log.d(TAG, "REQUEST_INSTALL_PACKAGES permission not allowed. Redirecting to settings...")
+                    val intent = Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                        data = android.net.Uri.parse("package:${context.packageName}")
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(intent)
+                    promise.reject("PERMISSION_DENIED", "Permission to install unknown sources is required. Settings screen opened.")
+                    return
+                }
+            }
+
+            // 3. Verify APK Package Integrity, Package Name & Version Code
+            val packageInfo = context.packageManager.getPackageArchiveInfo(filePath, 0)
+            if (packageInfo == null) {
+                promise.reject("INVALID_APK", "The downloaded file is corrupted or not a valid Android package archive.")
+                return
+            }
+
+            if (packageInfo.packageName != context.packageName) {
+                promise.reject("PACKAGE_MISMATCH", "Package name mismatch! Downloaded: ${packageInfo.packageName}, Expected: ${context.packageName}")
+                return
+            }
+
+            // Determine version codes defensively
+            val downloadedVersionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                packageInfo.longVersionCode
+            } else {
+                packageInfo.versionCode.toLong()
+            }
+
+            val currentVersionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                context.packageManager.getPackageInfo(context.packageName, 0).longVersionCode
+            } else {
+                context.packageManager.getPackageInfo(context.packageName, 0).versionCode.toLong()
+            }
+
+            Log.d(TAG, "APK validation: downloaded=$downloadedVersionCode, current=$currentVersionCode")
+            if (downloadedVersionCode < currentVersionCode) {
+                promise.reject("VERSION_DOWNGRADE", "Cannot downgrade from version $currentVersionCode to $downloadedVersionCode.")
+                return
+            }
+
+            // 4. Trigger standard Package Installer intent
             val authority = "${context.packageName}.provider"
             val apkUri = androidx.core.content.FileProvider.getUriForFile(context, authority, file)
             
             val intent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(apkUri, "application/vnd.android.package-archive")
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_GRANT_READ_URI_PERMISSION
             }
             context.startActivity(intent)
             promise.resolve(true)
@@ -220,6 +277,24 @@ class USChatModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
             Log.e(TAG, "Error launching package installer", e)
             promise.reject("INSTALL_FAILED", e.message)
         }
+    }
+
+    private fun getFileSha256(file: java.io.File): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        val fis = java.io.FileInputStream(file)
+        val buffer = ByteArray(8192)
+        var bytesRead = fis.read(buffer)
+        while (bytesRead != -1) {
+            digest.update(buffer, 0, bytesRead)
+            bytesRead = fis.read(buffer)
+        }
+        fis.close()
+        val hashBytes = digest.digest()
+        val sb = java.lang.StringBuilder()
+        for (b in hashBytes) {
+            sb.append(String.format("%02x", b))
+        }
+        return sb.toString()
     }
 
     // Required for React Native NativeEventEmitter (0.71+)

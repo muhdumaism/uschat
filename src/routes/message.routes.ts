@@ -20,6 +20,11 @@ const sendMessageSchema = z.object({
       fileSizeBytes: z.number(),
       encryptedKey: z.string(),
       initializationVector: z.string(),
+      width: z.number().int().optional().nullable(),
+      height: z.number().int().optional().nullable(),
+      duration: z.number().optional().nullable(),
+      thumbnailUrl: z.string().optional().nullable(),
+      blurHash: z.string().optional().nullable(),
     })
   ).optional(),
 });

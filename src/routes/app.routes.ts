@@ -1,15 +1,34 @@
 import { FastifyInstance } from 'fastify';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
+import { config } from '../config';
 
 export async function appRoutes(fastify: FastifyInstance) {
   // Check latest application version & metadata
   fastify.get('/version', async (_request, reply) => {
+    const apkPath = path.resolve(path.join(__dirname, '../../uschat.apk'));
+    let apkHash = '';
+    let apkSize = 0;
+    if (fs.existsSync(apkPath)) {
+      try {
+        const fileBuffer = fs.readFileSync(apkPath);
+        const hashSum = crypto.createHash('sha256');
+        hashSum.update(fileBuffer);
+        apkHash = hashSum.digest('hex');
+        apkSize = fileBuffer.length;
+      } catch (err: any) {
+        fastify.log.error(err, 'Failed to calculate APK SHA256');
+      }
+    }
+
     return reply.send({
-      latestVersion: '1.0.7',
-      versionCode: 107,
-      downloadUrl: 'https://uschat.ruptyl.space/api/v1/app/download',
-      releaseNotes: '⚡ USCHAT v1.0.7 Release:\n- Fixed critical bug where FCM push tokens were never registered with the backend (wrong AsyncStorage key)\n- Fixed token refresh: refreshed FCM tokens now auto-upload to backend\n- Fixed message notification delivery: upgraded to high-priority FCM for reliable background/killed delivery\n- Fixed duplicate notifications by switching to data-only FCM messages\n- Synced Android versionCode/versionName with app version',
+      latestVersion: '1.0.8',
+      versionCode: 108,
+      downloadUrl: config.apkDownloadUrl,
+      sha256: apkHash,
+      fileSize: apkSize,
+      releaseNotes: '⚡ USCHAT v1.0.8 Release:\n- Added WhatsApp-style View Once image preview flow\n- Implemented dynamic media upload size limit checks\n- Built background download resumes and integrity checks\n- Complete redesign of the in-app automatic system updater',
       forceUpdate: false,
     });
   });

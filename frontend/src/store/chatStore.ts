@@ -16,6 +16,7 @@ export interface ChatMessage {
   isViewed: boolean;
   replyToId?: string;
   replyTo?: any;
+  attachments?: any[];
   createdAt: string;
   isDeletedForEveryone?: boolean;
   reactions?: Array<{ userId: string; username: string; emoji: string }>;
@@ -129,6 +130,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         ephemeralDuration: options?.ephemeralDuration || 0,
         viewOnce: options?.viewOnce || false,
         replyToId: options?.replyToId,
+        attachments: (options as any)?.attachments,
       });
 
       const parsedReactions = (() => {
