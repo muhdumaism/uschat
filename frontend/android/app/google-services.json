@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "14084953395",
+    "project_id": "uschat-d62cc",
+    "storage_bucket": "uschat-d62cc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:14084953395:android:725bb006e3e3c9dc519a46",
+        "android_client_info": {
+          "package_name": "com.uschat.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCfO6idUt3YVnZ0EYMQY6dU_499WtvbwFc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

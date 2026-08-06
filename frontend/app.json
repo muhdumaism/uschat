@@ -9,13 +9,18 @@
     "assetBundlePatterns": [
       "**/*"
     ],
+    "icon": "./assets/icon.png",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.uschat.app"
     },
     "android": {
       "package": "com.uschat.app",
-      "versionCode": 18
+      "versionCode": 18,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#000000"
+      }
     },
     "web": {
       "bundler": "metro",

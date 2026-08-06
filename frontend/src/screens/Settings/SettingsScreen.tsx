@@ -102,7 +102,7 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justify.content: 'space-between',
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
   },
   logoutBtn: {
     flexDirection: 'row',
-    justify.content: 'center',
+    justifyContent: 'center',
     alignItems: 'center',
     marginTop: 28,
     paddingVertical: 14,

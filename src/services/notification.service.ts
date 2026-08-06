@@ -76,6 +76,7 @@ export class NotificationService {
    */
   static async registerToken(userId: string, token: string, platform: string = 'android', deviceId?: string) {
     try {
+      console.log(`[NotificationService] Registering token for user ${userId}...`);
       await prisma.pushToken.upsert({
         where: { token },
         create: {
@@ -94,7 +95,7 @@ export class NotificationService {
           lastUsedAt: new Date(),
         },
       });
-      console.log(`[NotificationService] Push token registered for user ${userId} [Platform: ${platform}]`);
+      console.log(`[NotificationService] Push token registered successfully for user ${userId} [Platform: ${platform}]`);
     } catch (err: any) {
       console.error('[NotificationService] registerToken error:', err.message);
     }
@@ -105,7 +106,9 @@ export class NotificationService {
    */
   static async unregisterToken(token: string) {
     try {
-      await prisma.pushToken.deleteMany({ where: { token } });
+      console.log(`[NotificationService] Unregistering token: ${token}`);
+      const result = await prisma.pushToken.deleteMany({ where: { token } });
+      console.log(`[NotificationService] Unregistered token successfully. Deleted rows: ${result.count}`);
     } catch (err: any) {
       console.error('[NotificationService] unregisterToken error:', err.message);
     }
@@ -116,7 +119,9 @@ export class NotificationService {
    */
   static async cleanInvalidTokens(userId: string) {
     try {
-      await prisma.pushToken.deleteMany({ where: { userId, isValid: false } });
+      console.log(`[NotificationService] Cleaning invalid tokens for user ${userId}`);
+      const result = await prisma.pushToken.deleteMany({ where: { userId, isValid: false } });
+      console.log(`[NotificationService] Cleaned up ${result.count} invalid tokens`);
     } catch (err: any) {
       console.error('[NotificationService] cleanInvalidTokens error:', err.message);
     }
@@ -134,6 +139,7 @@ export class NotificationService {
     senderAvatar?: string | null,
   ) {
     try {
+      console.log(`[NotificationService] Creating message notification from ${senderName} (ID: ${senderId}) in Chat ${chatId}`);
       // Find all chat members except the sender
       const members = await prisma.chatMember.findMany({
         where: { chatId, userId: { not: senderId } },
@@ -146,9 +152,12 @@ export class NotificationService {
           ? messageBody.substring(0, 120) + '...'
           : messageBody;
 
+      const timestamp = new Date().toISOString();
+
       for (const member of members) {
         // Skip if recipient has the app open and is actively viewing this specific chat screen
         if (WebSocketManager.isUserViewingChat(member.userId, chatId)) {
+          console.log(`[NotificationService] User ${member.userId} is actively viewing Chat ${chatId}. Suppressing push notification.`);
           continue;
         }
 
@@ -160,16 +169,20 @@ export class NotificationService {
           },
         });
 
+        console.log(`[NotificationService] Dispatching message notification to user ${member.userId} (unread count: ${unreadCount})`);
+
         await this.sendToUser(member.userId, {
           title: senderName,
           body: bodyText,
           imageUrl: senderAvatar || undefined,
         }, {
           type: 'message',
-          chatId,
           senderId,
+          conversationId: chatId,
           senderName,
-          messageType,
+          avatar: senderAvatar || '',
+          message: bodyText,
+          timestamp,
           badgeCount: String(unreadCount),
         }, 'messages');
       }
@@ -191,12 +204,14 @@ export class NotificationService {
     callerAvatar?: string | null,
   ) {
     try {
+      console.log(`[NotificationService] Creating incoming call notification from ${callerName} (Call ID: ${callId}) in Chat ${chatId}`);
       const members = await prisma.chatMember.findMany({
         where: { chatId, userId: { not: callerId } },
         select: { userId: true },
       });
 
       for (const member of members) {
+        console.log(`[NotificationService] Dispatching incoming call notification to user ${member.userId}`);
         await this.sendToUser(member.userId, {
           title: callerName,
           body: callType === 'VIDEO' ? '📹 Incoming video call...' : '📞 Incoming voice call...',
@@ -209,7 +224,7 @@ export class NotificationService {
           callerName,
           callType,
           roomName,
-          callerAvatar: callerAvatar || '',
+          avatar: callerAvatar || '',
         }, 'calls');
       }
     } catch (err: any) {
@@ -222,12 +237,14 @@ export class NotificationService {
    */
   static async sendCallCancelledNotification(chatId: string, callId: string, callerId: string) {
     try {
+      console.log(`[NotificationService] Creating call cancelled notification for Call ID: ${callId}`);
       const members = await prisma.chatMember.findMany({
         where: { chatId, userId: { not: callerId } },
         select: { userId: true },
       });
 
       for (const member of members) {
+        console.log(`[NotificationService] Dispatching call cancellation to user ${member.userId}`);
         await this.sendToUser(member.userId, undefined, {
           type: 'call_cancelled',
           callId,
@@ -249,6 +266,7 @@ export class NotificationService {
     callerName: string,
   ) {
     try {
+      console.log(`[NotificationService] Creating missed call notification for user ${recipientId} from ${callerName}`);
       await this.sendToUser(recipientId, {
         title: 'Missed Call',
         body: `Missed call from ${callerName}`,
@@ -272,15 +290,22 @@ export class NotificationService {
     data: Record<string, string>,
     channelId: string,
   ) {
-    if (!firebaseInitialized) return;
+    if (!firebaseInitialized) {
+      console.warn('[NotificationService] Skip sending: Firebase Admin SDK is not initialized.');
+      return;
+    }
 
     const tokens = await prisma.pushToken.findMany({
       where: { userId, isValid: true },
       select: { id: true, token: true, platform: true },
     });
 
-    if (tokens.length === 0) return;
+    if (tokens.length === 0) {
+      console.log(`[NotificationService] User ${userId} has 0 registered push tokens. Skipping dispatch.`);
+      return;
+    }
 
+    console.log(`[NotificationService] Sending notification to User ${userId} on ${tokens.length} devices.`);
     const invalidTokenIds: string[] = [];
 
     for (const { id, token, platform } of tokens) {
@@ -327,25 +352,30 @@ export class NotificationService {
           };
         }
 
-        await getMessaging().send(messagePayload);
+        console.log(`[NotificationService] FCM Request details for token ID ${id}:`, JSON.stringify(messagePayload, null, 2));
+        const fcmResponse = await getMessaging().send(messagePayload);
+        console.log(`[NotificationService] FCM Response for token ID ${id}: Success! ID = ${fcmResponse}`);
       } catch (err: any) {
+        console.error(`[NotificationService] FCM send failed for token ID ${id} (User: ${userId}). Error:`, err);
         if (
           err.code === 'messaging/invalid-registration-token' ||
           err.code === 'messaging/registration-token-not-registered'
         ) {
           invalidTokenIds.push(id);
-        } else {
-          console.error(`[NotificationService] FCM send error for token ${id} (user: ${userId}):`, err.message);
         }
       }
     }
 
-    // Flag invalid/expired tokens for cleanup
+    // Clean up invalid/expired tokens directly by deleting them
     if (invalidTokenIds.length > 0) {
-      await prisma.pushToken.updateMany({
-        where: { id: { in: invalidTokenIds } },
-        data: { isValid: false },
-      });
+      try {
+        await prisma.pushToken.deleteMany({
+          where: { id: { in: invalidTokenIds } },
+        });
+        console.log(`[NotificationService] Successfully deleted ${invalidTokenIds.length} invalid tokens from DB`);
+      } catch (cleanupErr: any) {
+        console.error(`[NotificationService] Failed to clean up invalid tokens:`, cleanupErr.message);
+      }
     }
   }
 }

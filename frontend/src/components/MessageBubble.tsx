@@ -1,6 +1,7 @@
-import React from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
-import { Eye, Lock, CheckCheck } from 'lucide-react-native';
+import React, { useRef } from 'react';
+import { View, Text, StyleSheet, Image, TouchableOpacity, Animated, Vibration } from 'react-native';
+import { Eye, Lock, CheckCheck, Reply } from 'lucide-react-native';
+import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { COLORS } from '../theme/colors';
 import { ChatMessage } from '../store/chatStore';
 
@@ -11,7 +12,21 @@ export interface MessageBubbleProps {
   onOpenImage?: (uri: string) => void;
   onLongPress?: () => void;
   onReactPress?: (emoji: string) => void;
+  onSwipeToReply?: (message: ChatMessage) => void;
+  onReplyPress?: (replyToId: string) => void;
 }
+
+const getReplyText = (msg: any) => {
+  if (!msg) return '';
+  switch (msg.messageType) {
+    case 'IMAGE': return '📷 Photo';
+    case 'VIDEO': return '🎥 Video';
+    case 'FILE': return '📄 Document';
+    case 'VOICE': return '🎤 Voice message';
+    case 'CALL_LOG': return '📞 Call';
+    default: return msg.decryptedText || msg.encryptedContent || '';
+  }
+};
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({
   message,
@@ -20,8 +35,35 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   onOpenImage,
   onLongPress,
   onReactPress,
+  onSwipeToReply,
+  onReplyPress,
 }) => {
   const time = new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const swipeableRef = useRef<Swipeable>(null);
+
+  const renderReplyPreview = () => {
+    if (!message.replyTo) return null;
+
+    const replyText = getReplyText(message.replyTo);
+
+    return (
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={() => onReplyPress && onReplyPress(message.replyTo.id)}
+        style={[styles.replyBubble, isMe ? styles.myReplyBubble : styles.peerReplyBubble]}
+      >
+        <View style={styles.replyBar} />
+        <View style={styles.replyContent}>
+          <Text style={styles.replySender}>
+            {message.replyTo.sender?.displayName || message.replyTo.sender?.username || 'User'}
+          </Text>
+          <Text style={styles.replyText} numberOfLines={1}>
+            {replyText}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   const renderReactions = () => {
     if (!message.reactions || message.reactions.length === 0) return null;
@@ -49,87 +91,153 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     );
   };
 
-  if (message.viewOnce && message.isViewed) {
+  const renderLeftActions = (progress: Animated.AnimatedInterpolation, dragX: Animated.AnimatedInterpolation) => {
+    const scale = dragX.interpolate({
+      inputRange: [0, 80],
+      outputRange: [0, 1],
+      extrapolate: 'clamp',
+    });
+
     return (
-      <View style={isMe ? styles.myContainer : styles.peerContainer}>
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onLongPress={onLongPress}
-          style={[styles.bubble, isMe ? styles.myBubble : styles.peerBubble]}
-        >
-          <View style={styles.viewOnceBox}>
-            <Eye size={16} color={COLORS.textMuted} />
-            <Text style={styles.viewOnceOpenedText}>View once photo opened</Text>
-          </View>
-          <Text style={styles.timeText}>{time}</Text>
-        </TouchableOpacity>
-        {renderReactions()}
+      <View style={styles.replyActionContainer}>
+        <Animated.View style={[styles.replyActionIcon, { transform: [{ scale }] }]}>
+          <Reply size={20} color={COLORS.primary} />
+        </Animated.View>
       </View>
     );
-  }
+  };
 
-  if (message.viewOnce && !message.isViewed) {
-    return (
-      <View style={isMe ? styles.myContainer : styles.peerContainer}>
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={onOpenViewOnce}
-          onLongPress={onLongPress}
-          style={[styles.bubble, isMe ? styles.myBubble : styles.peerBubble]}
-        >
-          <View style={styles.viewOnceBox}>
-            <Eye size={18} color={COLORS.primary} />
-            <Text style={styles.viewOncePendingText}>1 View Once Photo (Tap to view)</Text>
-          </View>
-          <Text style={styles.timeText}>{time}</Text>
-        </TouchableOpacity>
-        {renderReactions()}
-      </View>
-    );
-  }
-
-  const isImage =
-    message.messageType === 'IMAGE' ||
-    (message.decryptedText &&
-      message.decryptedText.startsWith('http') &&
-      (message.decryptedText.includes('/uploads/') ||
-        message.decryptedText.endsWith('.jpg') ||
-        message.decryptedText.endsWith('.png') ||
-        message.decryptedText.endsWith('.jpeg')));
-
-  const imageUri = message.decryptedText || message.encryptedContent;
-
-  return (
-    <View style={isMe ? styles.myContainer : styles.peerContainer}>
-      <TouchableOpacity
-        activeOpacity={0.95}
-        onLongPress={onLongPress}
-        style={[styles.bubble, isMe ? styles.myBubble : styles.peerBubble]}
-      >
-        {isImage ? (
+  const renderContent = () => {
+    if (message.viewOnce && message.isViewed) {
+      return (
+        <View style={isMe ? styles.myContainer : styles.peerContainer}>
           <TouchableOpacity
             activeOpacity={0.9}
-            onPress={() => onOpenImage && onOpenImage(imageUri)}
+            delayLongPress={180}
             onLongPress={onLongPress}
-            style={styles.imageContainer}
+            style={[styles.bubble, isMe ? styles.myBubble : styles.peerBubble]}
           >
-            <Image source={{ uri: imageUri }} style={styles.attachedImage} resizeMode="cover" />
+            <View style={styles.viewOnceBox}>
+              <Eye size={16} color={COLORS.textMuted} />
+              <Text style={styles.viewOnceOpenedText}>View once photo opened</Text>
+            </View>
+            <Text style={styles.timeText}>{time}</Text>
           </TouchableOpacity>
-        ) : (
-          <Text style={[styles.messageText, isMe ? styles.myText : styles.peerText]}>
-            {message.decryptedText ?? message.encryptedContent}
-          </Text>
-        )}
-
-        <View style={styles.footerRow}>
-          <Lock size={10} color={isMe ? 'rgba(255, 255, 255, 0.6)' : COLORS.textMuted} style={styles.lockIcon} />
-          <Text style={[styles.timeText, isMe ? styles.myTime : styles.peerTime]}>{time}</Text>
-          {isMe && <CheckCheck size={12} color={COLORS.primary} style={styles.checkIcon} />}
+          {renderReactions()}
         </View>
-      </TouchableOpacity>
-      {renderReactions()}
-    </View>
-  );
+      );
+    }
+
+    if (message.viewOnce && !message.isViewed) {
+      return (
+        <View style={isMe ? styles.myContainer : styles.peerContainer}>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            delayLongPress={180}
+            onPress={isMe ? undefined : onOpenViewOnce}
+            onLongPress={onLongPress}
+            style={[styles.bubble, isMe ? styles.myBubble : styles.peerBubble]}
+          >
+            <View style={styles.viewOnceBox}>
+              {isMe ? (
+                <Eye size={18} color="rgba(255, 255, 255, 0.6)" />
+              ) : (
+                <Eye size={18} color={COLORS.primary} />
+              )}
+              <Text style={[
+                styles.viewOncePendingText,
+                isMe ? { color: 'rgba(255, 255, 255, 0.8)' } : null
+              ]}>
+                {isMe ? '1 View Once Photo' : '1 View Once Photo (Tap to view)'}
+              </Text>
+            </View>
+            <Text style={[styles.timeText, isMe ? styles.myTime : styles.peerTime]}>{time}</Text>
+          </TouchableOpacity>
+          {renderReactions()}
+        </View>
+      );
+    }
+
+    const isImage =
+      message.messageType === 'IMAGE' ||
+      (message.decryptedText &&
+        message.decryptedText.startsWith('http') &&
+        (message.decryptedText.includes('/uploads/') ||
+          message.decryptedText.endsWith('.jpg') ||
+          message.decryptedText.endsWith('.png') ||
+          message.decryptedText.endsWith('.jpeg')));
+
+    const imageUri = message.decryptedText || message.encryptedContent;
+
+    return (
+      <View style={isMe ? styles.myContainer : styles.peerContainer}>
+        <TouchableOpacity
+          activeOpacity={0.95}
+          delayLongPress={180}
+          onLongPress={onLongPress}
+          style={[styles.bubble, isMe ? styles.myBubble : styles.peerBubble]}
+        >
+          {renderReplyPreview()}
+          {isImage ? (
+            <TouchableOpacity
+              activeOpacity={0.9}
+              delayLongPress={180}
+              onPress={() => onOpenImage && onOpenImage(imageUri)}
+              onLongPress={onLongPress}
+              style={styles.imageContainer}
+            >
+              <Image source={{ uri: imageUri }} style={styles.attachedImage} resizeMode="cover" />
+            </TouchableOpacity>
+          ) : (
+            <Text style={[styles.messageText, isMe ? styles.myText : styles.peerText]}>
+              {message.decryptedText ?? message.encryptedContent}
+            </Text>
+          )}
+
+          <View style={styles.footerRow}>
+            <Lock size={10} color={isMe ? 'rgba(255, 255, 255, 0.6)' : COLORS.textMuted} style={styles.lockIcon} />
+            <Text style={[styles.timeText, isMe ? styles.myTime : styles.peerTime]}>{time}</Text>
+            {isMe && (
+              <CheckCheck
+                size={12}
+                color={message.isViewed ? COLORS.primary : COLORS.textMuted}
+                style={styles.checkIcon}
+              />
+            )}
+          </View>
+        </TouchableOpacity>
+        {renderReactions()}
+      </View>
+    );
+  };
+
+  const bubbleContent = renderContent();
+
+  if (!isMe && onSwipeToReply) {
+    return (
+      <Swipeable
+        ref={swipeableRef}
+        friction={2}
+        leftThreshold={40}
+        renderLeftActions={renderLeftActions}
+        onSwipeableOpen={(direction) => {
+          if (direction === 'left') {
+            onSwipeToReply(message);
+            try {
+              Vibration.vibrate(15);
+            } catch (err) {}
+            setTimeout(() => {
+              swipeableRef.current?.close();
+            }, 50);
+          }
+        }}
+      >
+        {bubbleContent}
+      </Swipeable>
+    );
+  }
+
+  return bubbleContent;
 };
 
 const styles = StyleSheet.create({
@@ -153,7 +261,7 @@ const styles = StyleSheet.create({
   },
   myBubble: {
     alignSelf: 'flex-end',
-    backgroundColor: COLORS.primary,
+    backgroundColor: '#2A4B7C',
     borderBottomRightRadius: 4,
   },
   peerBubble: {
@@ -260,5 +368,50 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
     marginLeft: 4,
+  },
+  replyBubble: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 8,
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  myReplyBubble: {
+    backgroundColor: 'rgba(0, 0, 0, 0.15)',
+  },
+  peerReplyBubble: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  replyBar: {
+    width: 3.5,
+    backgroundColor: COLORS.primary,
+  },
+  replyContent: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flex: 1,
+  },
+  replySender: {
+    fontWeight: '700',
+    fontSize: 12,
+    color: COLORS.primary,
+    marginBottom: 2,
+  },
+  replyText: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+  },
+  replyActionContainer: {
+    width: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  replyActionIcon: {
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

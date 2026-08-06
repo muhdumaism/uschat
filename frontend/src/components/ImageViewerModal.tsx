@@ -1,5 +1,5 @@
-import React from 'react';
-import { Modal, View, Text, StyleSheet, Image, TouchableOpacity, SafeAreaView } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet, Image, TouchableOpacity, SafeAreaView, Platform, NativeModules } from 'react-native';
 import { X, Eye, Lock } from 'lucide-react-native';
 import { COLORS } from '../theme/colors';
 
@@ -16,11 +16,30 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
   isViewOnce = false,
   onClose,
 }) => {
+  useEffect(() => {
+    if (visible && isViewOnce && Platform.OS === 'android' && NativeModules.USChatModule) {
+      try {
+        NativeModules.USChatModule.setSecureWindow(true);
+      } catch (err) {
+        console.warn('Failed to enable secure window:', err);
+      }
+    }
+    return () => {
+      if (Platform.OS === 'android' && NativeModules.USChatModule) {
+        try {
+          NativeModules.USChatModule.setSecureWindow(false);
+        } catch (err) {
+          console.warn('Failed to disable secure window:', err);
+        }
+      }
+    };
+  }, [visible, isViewOnce]);
+
   if (!visible || !imageUri) return null;
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
-      <SafeAreaView style={styles.container}>
+    <View style={[styles.container, StyleSheet.absoluteFill, { zIndex: 9999 }]}>
+      <SafeAreaView style={{ flex: 1, justifyContent: 'space-between' }}>
         {/* Top Header */}
         <View style={styles.topHeader}>
           <View style={styles.badge}>
@@ -56,15 +75,13 @@ export const ImageViewerModal: React.FC<ImageViewerModalProps> = ({
           </Text>
         </View>
       </SafeAreaView>
-    </Modal>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     backgroundColor: '#000',
-    justifyContent: 'space-between',
   },
   topHeader: {
     flexDirection: 'row',

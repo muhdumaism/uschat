@@ -12,6 +12,7 @@ import {
   StatusBar,
   Modal,
   Clipboard,
+  NativeModules,
 } from 'react-native';
 import { ArrowLeft, Phone, Send, Eye, ShieldCheck, Lock, Paperclip, Reply, Trash2, Copy, Edit } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -28,6 +29,19 @@ import { useAuthStore } from '../../store/authStore';
 import { useCallStore } from '../../store/callStore';
 import { apiClient } from '../../api/client';
 import { API_BASE_URL } from '../../api/config';
+import { WebSocketClient } from '../../api/wsClient';
+
+const getReplyText = (msg: any) => {
+  if (!msg) return '';
+  switch (msg.messageType) {
+    case 'IMAGE': return '📷 Photo';
+    case 'VIDEO': return '🎥 Video';
+    case 'FILE': return '📄 Document';
+    case 'VOICE': return '🎤 Voice message';
+    case 'CALL_LOG': return '📞 Call';
+    default: return msg.decryptedText || msg.encryptedContent || '';
+  }
+};
 
 export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
   const { chatId, name, peerUsername } = route.params;
@@ -58,6 +72,7 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
   );
 
   const flatListRef = useRef<FlatList>(null);
+  const hasInitialScroll = useRef(false);
 
   const scrollToBottom = (animated = false) => {
     if (chatMessages.length > 0) {
@@ -96,10 +111,34 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
 
   useEffect(() => {
     fetchMessages(chatId);
+    hasInitialScroll.current = false;
+
+    // Notify websocket and native code that we opened this chat
+    WebSocketClient.send('CHAT_OPENED', { chatId });
+    WebSocketClient.send('READ_RECEIPT', { chatId });
+    if (Platform.OS === 'android' && NativeModules.USChatModule) {
+      try {
+        NativeModules.USChatModule.setActiveChatId(chatId);
+      } catch (err) {}
+    }
+
+    return () => {
+      WebSocketClient.send('CHAT_CLOSED', { chatId });
+      if (Platform.OS === 'android' && NativeModules.USChatModule) {
+        try {
+          NativeModules.USChatModule.setActiveChatId(null);
+        } catch (err) {}
+      }
+    };
   }, [chatId]);
 
   useEffect(() => {
-    scrollToBottom(false);
+    if (chatMessages.length > 0) {
+      WebSocketClient.send('READ_RECEIPT', { chatId });
+    }
+    if (hasInitialScroll.current) {
+      scrollToBottom(true);
+    }
   }, [chatMessages.length]);
 
   const handleSend = async () => {
@@ -312,12 +351,25 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
             onReactPress={async (emoji) => {
               await reactToMessage(item.id, chatId, emoji);
             }}
+            onSwipeToReply={setReplyingToMessage}
+            onReplyPress={(replyToId) => {
+              const index = chatMessages.findIndex((m) => m.id === replyToId);
+              if (index !== -1) {
+                flatListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+              }
+            }}
           />
         )}
         contentContainerStyle={styles.listContent}
+        onContentSizeChange={() => {
+          if (!hasInitialScroll.current && chatMessages.length > 0) {
+            flatListRef.current?.scrollToEnd({ animated: false });
+            hasInitialScroll.current = true;
+          }
+        }}
       />
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {replyingToMessage && (
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: COLORS.card, paddingHorizontal: 16, paddingVertical: 8, borderTopWidth: 1, borderTopColor: COLORS.border }}>
             <View style={{ flex: 1 }}>
@@ -325,7 +377,7 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
                 Replying to {replyingToMessage.senderId === currentUser?.id ? 'yourself' : `@${replyingToMessage.sender?.username || 'user'}`}
               </Text>
               <Text style={{ color: COLORS.textMuted, fontSize: 12 }} numberOfLines={1}>
-                {replyingToMessage.decryptedText || replyingToMessage.encryptedContent}
+                {getReplyText(replyingToMessage)}
               </Text>
             </View>
             <TouchableOpacity onPress={() => setReplyingToMessage(null)}>

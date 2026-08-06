@@ -139,9 +139,23 @@ export function registerWebSocketRoutes(fastify: FastifyInstance) {
               break;
 
             case 'READ_RECEIPT':
+              try {
+                await prisma.message.updateMany({
+                  where: {
+                    chatId: payload.chatId,
+                    senderId: { not: decoded.id },
+                    isViewed: false,
+                  },
+                  data: {
+                    isViewed: true,
+                  },
+                });
+              } catch (err) {
+                console.error('Error updating read receipts in database:', err);
+              }
+
               WebSocketManager.broadcastToChat(payload.chatId, decoded.id, 'READ_RECEIPT', {
                 chatId: payload.chatId,
-                messageId: payload.messageId,
                 userId: decoded.id,
                 readAt: new Date(),
               });

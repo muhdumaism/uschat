@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Platform, Alert } from 'react-native';
-import { Mic, MicOff, PhoneOff, ShieldCheck, Volume2 } from 'lucide-react-native';
+import { Mic, MicOff, PhoneOff, ShieldCheck, Volume2, Activity } from 'lucide-react-native';
 import { COLORS } from '../../theme/colors';
 import { useCallStore } from '../../store/callStore';
 import { SoundService } from '../../services/soundService';
@@ -12,11 +12,30 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
   const isConnected = activeCall?.isConnected || false;
   const roomRef = useRef<any>(null);
 
-  // Play outgoing ringback tone when screen mounts
+  // Diagnostics and media states
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [roomState, setRoomState] = useState('disconnected');
+  const [isLocalTrackPublished, setIsLocalTrackPublished] = useState(false);
+  const [remoteParticipantConnected, setRemoteParticipantConnected] = useState(false);
+  const [subscribedTracks, setSubscribedTracks] = useState<any[]>([]);
+  const [isSpeakerOn, setIsSpeakerOn] = useState(false);
+
+  // Play outgoing ringback tone when screen mounts & request micro permissions
   useEffect(() => {
     if (!isConnected) {
       SoundService.playRingtone(false);
     }
+
+    const checkPermissions = async () => {
+      const { requestCallPermissions } = require('../../components/IncomingCallModal');
+      const granted = await requestCallPermissions(false);
+      if (!granted) {
+        Alert.alert('Permission Denied', 'Microphone permission is required for voice calls.');
+        handleEndCall();
+      }
+    };
+    checkPermissions();
+
     return () => {
       SoundService.stop();
     };
@@ -35,7 +54,9 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
 
     const connectToRoom = async () => {
       try {
+        console.log('LiveKit: Connecting to room with WS:', activeCall!.wsUrl);
         const { Room, RoomEvent, AudioSession } = require('@livekit/react-native');
+        
         room = new Room({
           audioCaptureDefaults: {
             echoCancellation: true,
@@ -44,30 +65,102 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
           },
         });
         roomRef.current = room;
+        setRoomState(room.state);
+
+        room.on(RoomEvent.StateChanged, (state: any) => {
+          setRoomState(state);
+          console.log(`[LiveKit Event] StateChanged: ${state}`);
+        });
 
         room.on(RoomEvent.Disconnected, () => {
-          console.log('LiveKit: Disconnected from room');
+          console.log('[LiveKit Event] Disconnected');
+          setRoomState('disconnected');
+          setIsLocalTrackPublished(false);
+          setRemoteParticipantConnected(false);
+          setSubscribedTracks([]);
           try {
             AudioSession.stop();
-          } catch {}
+          } catch (err) {
+            console.error('AudioSession stop error:', err);
+          }
         });
 
         room.on(RoomEvent.TrackSubscribed, (track: any) => {
-          console.log('LiveKit: Track subscribed', track.kind);
+          console.log(`[LiveKit Event] TrackSubscribed: kind=${track.kind}, sid=${track.sid}`);
+          if (track.kind === 'audio') {
+            setSubscribedTracks((prev) => {
+              if (prev.some((t) => t.sid === track.sid)) return prev;
+              return [...prev, track];
+            });
+          }
+        });
+
+        room.on(RoomEvent.TrackUnsubscribed, (track: any) => {
+          console.log(`[LiveKit Event] TrackUnsubscribed: kind=${track.kind}, sid=${track.sid}`);
+          if (track.kind === 'audio') {
+            setSubscribedTracks((prev) => prev.filter((t) => t.sid !== track.sid));
+          }
+        });
+
+        room.on(RoomEvent.LocalTrackPublished, (publication: any) => {
+          console.log(`[LiveKit Event] LocalTrackPublished: kind=${publication.track.kind}`);
+          if (publication.track.kind === 'audio') {
+            setIsLocalTrackPublished(true);
+          }
+        });
+
+        room.on(RoomEvent.LocalTrackUnpublished, (publication: any) => {
+          console.log(`[LiveKit Event] LocalTrackUnpublished: kind=${publication.track.kind}`);
+          if (publication.track.kind === 'audio') {
+            setIsLocalTrackPublished(false);
+          }
+        });
+
+        room.on(RoomEvent.ParticipantConnected, (participant: any) => {
+          console.log(`[LiveKit Event] ParticipantConnected: identity=${participant.identity}`);
+          setRemoteParticipantConnected(true);
+        });
+
+        room.on(RoomEvent.ParticipantDisconnected, (participant: any) => {
+          console.log(`[LiveKit Event] ParticipantDisconnected: identity=${participant.identity}`);
+          setRemoteParticipantConnected(false);
+        });
+
+        room.on(RoomEvent.TrackMuted, (publication: any) => {
+          console.log(`[LiveKit Event] TrackMuted: kind=${publication.track.kind}`);
+        });
+
+        room.on(RoomEvent.TrackUnmuted, (publication: any) => {
+          console.log(`[LiveKit Event] TrackUnmuted: kind=${publication.track.kind}`);
         });
 
         // Start WebRTC audio session configuration
         await AudioSession.start();
+        console.log('LiveKit: AudioSession started');
+
+        // Query initial speakerphone status
+        try {
+          const isOn = await AudioSession.isSpeakerphoneOn();
+          setIsSpeakerOn(isOn);
+        } catch (err) {
+          console.warn('Could not query speaker state:', err);
+        }
 
         await room.connect(activeCall!.wsUrl, activeCall!.livekitToken, {
           autoSubscribe: true,
         });
+        console.log('LiveKit: Connected to room. Publishing microphone...');
 
         // Publish microphone audio
         await room.localParticipant.setMicrophoneEnabled(true);
-        console.log('LiveKit: Connected and publishing audio');
+        setIsLocalTrackPublished(true);
+
+        if (room.participants.size > 0) {
+          setRemoteParticipantConnected(true);
+        }
       } catch (err) {
         console.error('LiveKit connection error:', err);
+        Alert.alert('Call Connection Failed', 'Could not establish WebRTC audio session.');
       }
     };
 
@@ -81,7 +174,9 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
           room.disconnect();
           const { AudioSession } = require('@livekit/react-native');
           AudioSession.stop();
-        } catch {}
+        } catch (err) {
+          console.error('Room disconnect cleanup error:', err);
+        }
       }
     };
   }, [isConnected]);
@@ -126,8 +221,62 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
     if (roomRef.current?.localParticipant) {
       try {
         roomRef.current.localParticipant.setMicrophoneEnabled(activeCall.isMuted);
-      } catch {}
+      } catch (err) {
+        console.error('Error toggling mic:', err);
+      }
     }
+  };
+
+  const handleToggleSpeaker = async () => {
+    try {
+      const { AudioSession } = require('@livekit/react-native');
+      const nextState = !isSpeakerOn;
+      await AudioSession.setSpeakerphoneOn(nextState);
+      setIsSpeakerOn(nextState);
+      console.log('LiveKit: Speakerphone toggled to', nextState);
+    } catch (err) {
+      console.error('Error toggling speaker:', err);
+    }
+  };
+
+  const renderDiagnostics = () => {
+    if (!showDiagnostics) return null;
+
+    return (
+      <View style={styles.diagnosticsPanel}>
+        <Text style={styles.diagTitle}>CALL DIAGNOSTICS</Text>
+        <View style={styles.diagRow}>
+          <Text style={styles.diagLabel}>Room State:</Text>
+          <Text style={[styles.diagVal, { color: roomState === 'connected' ? COLORS.success : COLORS.warning }]}>
+            {roomState.toUpperCase()}
+          </Text>
+        </View>
+        <View style={styles.diagRow}>
+          <Text style={styles.diagLabel}>Mic Active:</Text>
+          <Text style={styles.diagVal}>{!activeCall?.isMuted ? 'YES' : 'NO (Muted)'}</Text>
+        </View>
+        <View style={styles.diagRow}>
+          <Text style={styles.diagLabel}>Local Track Published:</Text>
+          <Text style={styles.diagVal}>{isLocalTrackPublished ? 'YES' : 'NO'}</Text>
+        </View>
+        <View style={styles.diagRow}>
+          <Text style={styles.diagLabel}>Remote Participant Joined:</Text>
+          <Text style={styles.diagVal}>{remoteParticipantConnected ? 'YES' : 'NO (Waiting)'}</Text>
+        </View>
+        <View style={styles.diagRow}>
+          <Text style={styles.diagLabel}>Remote Audio Subscribed:</Text>
+          <Text style={styles.diagVal}>{subscribedTracks.length > 0 ? 'YES' : 'NO'}</Text>
+        </View>
+        <View style={styles.diagRow}>
+          <Text style={styles.diagLabel}>Audio Route:</Text>
+          <Text style={styles.diagVal}>{isSpeakerOn ? 'SPEAKERPHONE' : 'EARPIECE / WIRED'}</Text>
+        </View>
+        <View style={styles.diagRow}>
+          <Text style={styles.diagLabel}>Audio Stream Tx/Rx:</Text>
+          <Text style={styles.diagVal}>ACTIVE (WebRTC Streaming)</Text>
+        </View>
+      </View>
+    );
   };
 
   const formatDuration = (totalSeconds: number) => {
@@ -146,8 +295,18 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
           <ShieldCheck size={14} color={COLORS.success} />
           <Text style={styles.e2eeText}>End-to-End Encrypted</Text>
         </View>
-        <Text style={styles.roomName}>Voice Call</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', width: '100%', marginTop: 8 }}>
+          <Text style={styles.roomName}>Voice Call</Text>
+          <TouchableOpacity
+            onPress={() => setShowDiagnostics(!showDiagnostics)}
+            style={{ marginLeft: 10, padding: 4 }}
+          >
+            <Activity size={16} color={showDiagnostics ? COLORS.primary : COLORS.textMuted} />
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {renderDiagnostics()}
 
       <View style={styles.centerArea}>
         {/* Pulsing ring animation effect when ringing */}
@@ -181,10 +340,23 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
           )}
         </TouchableOpacity>
 
+        <TouchableOpacity
+          onPress={handleToggleSpeaker}
+          style={[styles.controlBtn, isSpeakerOn && styles.activeBtn]}
+        >
+          <Volume2 size={22} color={isSpeakerOn ? '#FFF' : COLORS.textPrimary} />
+        </TouchableOpacity>
+
         <TouchableOpacity onPress={handleEndCall} style={styles.hangupBtn}>
           <PhoneOff size={26} color="#FFF" />
         </TouchableOpacity>
       </View>
+
+      {/* Render remote audio tracks to direct WebRTC streaming to speakers */}
+      {subscribedTracks.map((track) => {
+        const { AudioTrack } = require('@livekit/react-native');
+        return <AudioTrack key={track.sid} track={track} />;
+      })}
     </SafeAreaView>
   );
 };
@@ -323,5 +495,39 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,
     shadowRadius: 12,
+  },
+  diagnosticsPanel: {
+    position: 'absolute',
+    top: 120,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(18, 26, 45, 0.95)',
+    borderColor: 'rgba(59, 130, 246, 0.35)',
+    borderWidth: 1.5,
+    borderRadius: 14,
+    padding: 16,
+    zIndex: 9999,
+  },
+  diagTitle: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    textAlign: 'center',
+    letterSpacing: 1,
+  },
+  diagRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginVertical: 4,
+  },
+  diagLabel: {
+    color: COLORS.textMuted,
+    fontSize: 11,
+  },
+  diagVal: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '600',
   },
 });

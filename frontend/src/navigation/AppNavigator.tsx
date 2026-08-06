@@ -12,7 +12,7 @@ import { SettingsScreen } from '../screens/Settings/SettingsScreen';
 import { IncomingCallModal } from '../components/IncomingCallModal';
 import { useCallStore } from '../store/callStore';
 import { useNavigation } from '@react-navigation/native';
-import { ActivityIndicator, View, Alert } from 'react-native';
+import { ActivityIndicator, View, Alert, NativeEventEmitter, NativeModules, Platform } from 'react-native';
 import { COLORS } from '../theme/colors';
 import { apiClient } from '../api/client';
 
@@ -36,7 +36,7 @@ const CallBridge = () => {
         type: 'AUDIO',
         isMuted: false,
         isConnected: true, // callee is immediately connected
-        peerName: incomingCall?.initiatorName || 'Caller',
+        peerName: incomingCall?.initiatorName || incomingCall?.callerName || 'Caller',
       });
       navigation.navigate('CallScreen');
     } catch (err: any) {
@@ -44,6 +44,65 @@ const CallBridge = () => {
       Alert.alert('Call Failed', err.response?.data?.message || 'Unable to join call');
     }
   };
+
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !NativeModules.USChatModule) return;
+
+    const { USChatModule } = NativeModules;
+    const eventEmitter = new NativeEventEmitter(USChatModule);
+
+    const handleCallAction = (data: any) => {
+      console.log('[AppNavigator] Received native call action:', data);
+      if (data.action === 'accept') {
+        handleAccept({
+          callId: data.callId,
+          chatId: data.chatId,
+          roomName: data.roomName,
+          type: data.callType,
+          initiatorName: data.callerName,
+        });
+      } else if (data.action === 'decline') {
+        useCallStore.getState().setIncomingCall(null);
+      } else if (data.action === 'show') {
+        useCallStore.getState().setIncomingCall({
+          callId: data.callId,
+          chatId: data.chatId,
+          roomName: data.roomName,
+          type: data.callType,
+          initiatorName: data.callerName,
+        });
+      }
+    };
+
+    const handleOpenChatAction = (chatId: string) => {
+      console.log('[AppNavigator] Received native open chat action:', chatId);
+      if (chatId) {
+        navigation.navigate('Chat', { chatId, name: 'Chat' });
+      }
+    };
+
+    // 1. Process initial actions (cold-start)
+    USChatModule.getInitialCallAction().then((data: any) => {
+      if (data) {
+        handleCallAction(data);
+      }
+    });
+
+    USChatModule.getInitialOpenChatAction().then((chatId: string | null) => {
+      if (chatId) {
+        handleOpenChatAction(chatId);
+      }
+    });
+
+    // 2. Add event listeners for warm-starts
+    const callSub = eventEmitter.addListener('onCallAction', handleCallAction);
+    const chatSub = eventEmitter.addListener('onOpenChat', handleOpenChatAction);
+
+    return () => {
+      callSub.remove();
+      chatSub.remove();
+    };
+  }, []);
 
   return <IncomingCallModal onAccept={handleAccept} />;
 };

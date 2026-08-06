@@ -167,6 +167,40 @@ export async function callRoutes(fastify: FastifyInstance) {
     }
   });
 
+  fastify.post('/:callId/decline', { preHandler: [authenticate] }, async (request, reply) => {
+    const { callId } = request.params as { callId: string };
+
+    try {
+      const call = await prisma.call.update({
+        where: { id: callId },
+        data: { status: 'ENDED', endedAt: new Date() },
+      });
+
+      // Log call decline as a system CALL_LOG message
+      const msg = await prisma.message.create({
+        data: {
+          chatId: call.chatId,
+          senderId: request.user.id,
+          encryptedContent: `📞 Call declined`,
+          messageType: 'CALL_LOG',
+        },
+        include: {
+          sender: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
+        },
+      });
+
+      WebSocketManager.broadcastToChat(call.chatId, request.user.id, 'NEW_MESSAGE', msg);
+      WebSocketManager.broadcastToChat(call.chatId, request.user.id, 'CALL_ENDED', { callId, reason: 'DECLINED' });
+
+      // Send cancel notification (removes incoming call notif on peer's device)
+      NotificationService.sendCallCancelledNotification(call.chatId, callId, request.user.id);
+
+      return reply.send(call);
+    } catch (err) {
+      return reply.send({ success: true });
+    }
+  });
+
   // Call history — deduplicated, with direction and duration
   fastify.get('/history', { preHandler: [authenticate] }, async (request, reply) => {
     const calls = await prisma.call.findMany({

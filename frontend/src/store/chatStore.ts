@@ -3,6 +3,7 @@ import { apiClient } from '../api/client';
 import { SignalEngine } from '../crypto/signalEngine';
 import { WebSocketClient } from '../api/wsClient';
 import { useCallStore } from './callStore';
+import { NativeModules, Platform } from 'react-native';
 
 export interface ChatMessage {
   id: string;
@@ -223,6 +224,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   setActiveChat: (chatId) => {
     set({ activeChatId: chatId });
+    if (Platform.OS === 'android' && NativeModules.USChatModule) {
+      try {
+        NativeModules.USChatModule.setActiveChatId(chatId);
+      } catch (err) {}
+    }
   },
 
   initWsListeners: () => {
@@ -304,6 +310,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
             m.id === messageId
               ? { ...m, reactions }
               : m
+          );
+          return {
+            messages: {
+              ...state.messages,
+              [chatId]: updatedList,
+            },
+          };
+        });
+      } else if (event === 'READ_RECEIPT') {
+        const { chatId, userId } = payload;
+        set((state) => {
+          const list = state.messages[chatId] || [];
+          const updatedList = list.map((m) =>
+            m.senderId !== userId ? { ...m, isViewed: true } : m
           );
           return {
             messages: {
