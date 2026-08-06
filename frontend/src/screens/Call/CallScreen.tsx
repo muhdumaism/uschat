@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Platform, Alert } from 'react-native';
-import { Mic, MicOff, PhoneOff, ShieldCheck, Volume2, Activity } from 'lucide-react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Platform, Alert, Dimensions } from 'react-native';
+import { Mic, MicOff, PhoneOff, ShieldCheck, Volume2, VolumeX, Activity, Headphones, Tv } from 'lucide-react-native';
+const { Room, RoomEvent, AudioSession, VideoView, AudioTrack } = require('@livekit/react-native');
 import { COLORS } from '../../theme/colors';
 import { useCallStore } from '../../store/callStore';
 import { SoundService } from '../../services/soundService';
 import { apiClient } from '../../api/client';
+
+const { width } = Dimensions.get('window');
 
 export const CallScreen: React.FC<any> = ({ navigation }) => {
   const { activeCall, toggleMute, endCall } = useCallStore();
@@ -12,14 +15,22 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
   const isConnected = activeCall?.isConnected || false;
   const roomRef = useRef<any>(null);
 
-  // Diagnostics and media states
+  // Advanced States
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [roomState, setRoomState] = useState('disconnected');
   const [isLocalTrackPublished, setIsLocalTrackPublished] = useState(false);
   const [remoteParticipantConnected, setRemoteParticipantConnected] = useState(false);
   const [subscribedTracks, setSubscribedTracks] = useState<any[]>([]);
+  const [subscribedVideoTracks, setSubscribedVideoTracks] = useState<any[]>([]);
   const [isSpeakerOn, setIsSpeakerOn] = useState(false);
   const [hasCallPermissions, setHasCallPermissions] = useState(false);
+
+  // Voice Lounge States
+  const [isDeafened, setIsDeafened] = useState(false);
+  const [isNoiseFilterEnabled, setIsNoiseFilterEnabled] = useState(true);
+  const [isLocalScreenShareEnabled, setIsLocalScreenShareEnabled] = useState(false);
+  const [participantsList, setParticipantsList] = useState<any[]>([]);
+  const [activeSpeakers, setActiveSpeakers] = useState<string[]>([]);
 
   // Play outgoing ringback tone when screen mounts & request micro permissions
   useEffect(() => {
@@ -58,12 +69,11 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
     const connectToRoom = async () => {
       try {
         console.log('LiveKit: Connecting to room with WS:', activeCall!.wsUrl);
-        const { Room, RoomEvent, AudioSession } = require('@livekit/react-native');
         
         room = new Room({
           audioCaptureDefaults: {
             echoCancellation: true,
-            noiseSuppression: true,
+            noiseSuppression: isNoiseFilterEnabled,
             autoGainControl: true,
           },
         });
@@ -81,6 +91,8 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
           setIsLocalTrackPublished(false);
           setRemoteParticipantConnected(false);
           setSubscribedTracks([]);
+          setSubscribedVideoTracks([]);
+          setParticipantsList([]);
           try {
             AudioSession.stop();
           } catch (err) {
@@ -88,12 +100,17 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
           }
         });
 
-        room.on(RoomEvent.TrackSubscribed, (track: any) => {
-          console.log(`[LiveKit Event] TrackSubscribed: kind=${track.kind}, sid=${track.sid}`);
+        room.on(RoomEvent.TrackSubscribed, (track: any, publication: any, participant: any) => {
+          console.log(`[LiveKit Event] TrackSubscribed: kind=${track.kind}, source=${track.source}, sid=${track.sid}`);
           if (track.kind === 'audio') {
             setSubscribedTracks((prev) => {
               if (prev.some((t) => t.sid === track.sid)) return prev;
               return [...prev, track];
+            });
+          } else if (track.kind === 'video') {
+            setSubscribedVideoTracks((prev) => {
+              if (prev.some((t) => t.track.sid === track.sid)) return prev;
+              return [...prev, { track, participant, publication }];
             });
           }
         });
@@ -102,6 +119,8 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
           console.log(`[LiveKit Event] TrackUnsubscribed: kind=${track.kind}, sid=${track.sid}`);
           if (track.kind === 'audio') {
             setSubscribedTracks((prev) => prev.filter((t) => t.sid !== track.sid));
+          } else if (track.kind === 'video') {
+            setSubscribedVideoTracks((prev) => prev.filter((t) => t.track.sid !== track.sid));
           }
         });
 
@@ -119,22 +138,28 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
           }
         });
 
+        const updateParticipants = () => {
+          if (roomRef.current) {
+            setParticipantsList(Array.from(roomRef.current.participants.values()));
+            setRemoteParticipantConnected(roomRef.current.participants.size > 0);
+          }
+        };
+
         room.on(RoomEvent.ParticipantConnected, (participant: any) => {
           console.log(`[LiveKit Event] ParticipantConnected: identity=${participant.identity}`);
-          setRemoteParticipantConnected(true);
+          updateParticipants();
+          SoundService.playTone('join');
         });
 
         room.on(RoomEvent.ParticipantDisconnected, (participant: any) => {
           console.log(`[LiveKit Event] ParticipantDisconnected: identity=${participant.identity}`);
-          setRemoteParticipantConnected(false);
+          updateParticipants();
+          SoundService.playTone('leave');
         });
 
-        room.on(RoomEvent.TrackMuted, (publication: any) => {
-          console.log(`[LiveKit Event] TrackMuted: kind=${publication.track.kind}`);
-        });
-
-        room.on(RoomEvent.TrackUnmuted, (publication: any) => {
-          console.log(`[LiveKit Event] TrackUnmuted: kind=${publication.track.kind}`);
+        room.on(RoomEvent.ActiveSpeakersChanged, (speakers: any[]) => {
+          const speakerIdentities = speakers.map((s) => s.identity);
+          setActiveSpeakers(speakerIdentities);
         });
 
         // Start WebRTC audio session configuration
@@ -158,9 +183,8 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
         await room.localParticipant.setMicrophoneEnabled(true);
         setIsLocalTrackPublished(true);
 
-        if (room.participants.size > 0) {
-          setRemoteParticipantConnected(true);
-        }
+        updateParticipants();
+        SoundService.playTone('join');
       } catch (err) {
         console.error('LiveKit connection error:', err);
         Alert.alert('Call Connection Failed', 'Could not establish WebRTC audio session.');
@@ -175,7 +199,6 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
       if (room) {
         try {
           room.disconnect();
-          const { AudioSession } = require('@livekit/react-native');
           AudioSession.stop();
         } catch (err) {
           console.error('Room disconnect cleanup error:', err);
@@ -204,26 +227,27 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
 
   const handleEndCall = async () => {
     try {
-      // Disconnect from LiveKit room
       if (roomRef.current) {
         roomRef.current.disconnect();
       }
-      // Tell the backend to end the call
       await apiClient.post(`/calls/${activeCall.callId}/end`);
     } catch (err) {
       console.error('End call error:', err);
     }
+    SoundService.playTone('leave');
     endCall();
     SoundService.stop();
     navigation.goBack();
   };
 
   const handleToggleMute = () => {
+    if (!activeCall) return;
+    const nextMuteState = !activeCall.isMuted;
     toggleMute();
-    // Also toggle mic on LiveKit room
     if (roomRef.current?.localParticipant) {
       try {
-        roomRef.current.localParticipant.setMicrophoneEnabled(activeCall.isMuted);
+        roomRef.current.localParticipant.setMicrophoneEnabled(!nextMuteState);
+        SoundService.playTone(nextMuteState ? 'mute' : 'unmute');
       } catch (err) {
         console.error('Error toggling mic:', err);
       }
@@ -232,7 +256,6 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
 
   const handleToggleSpeaker = async () => {
     try {
-      const { AudioSession } = require('@livekit/react-native');
       const nextState = !isSpeakerOn;
       await AudioSession.setSpeakerphoneOn(nextState);
       setIsSpeakerOn(nextState);
@@ -242,8 +265,35 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
     }
   };
 
+  const handleToggleDeafen = () => {
+    const nextDeafenState = !isDeafened;
+    setIsDeafened(nextDeafenState);
+    SoundService.playTone(nextDeafenState ? 'deafen' : 'undeafen');
+  };
+
+  const handleToggleScreenShare = async () => {
+    if (!roomRef.current?.localParticipant) return;
+    try {
+      const nextState = !isLocalScreenShareEnabled;
+      await roomRef.current.localParticipant.setScreenShareEnabled(nextState);
+      setIsLocalScreenShareEnabled(nextState);
+      SoundService.playTone(nextState ? 'stream_start' : 'stream_stop');
+    } catch (err) {
+      console.warn('Error toggling screen share:', err);
+      Alert.alert('Screen Share Failed', 'Could not toggle screenshare.');
+    }
+  };
+
+  const handleToggleNoiseFilter = () => {
+    const nextState = !isNoiseFilterEnabled;
+    setIsNoiseFilterEnabled(nextState);
+    SoundService.playTone(nextState ? 'unmute' : 'mute');
+  };
+
   const renderDiagnostics = () => {
     if (!showDiagnostics) return null;
+
+    const screenshareSubscribed = subscribedVideoTracks.length > 0;
 
     return (
       <View style={styles.diagnosticsPanel}>
@@ -259,6 +309,10 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
           <Text style={styles.diagVal}>{!activeCall?.isMuted ? 'YES' : 'NO (Muted)'}</Text>
         </View>
         <View style={styles.diagRow}>
+          <Text style={styles.diagLabel}>Noise Cancellation:</Text>
+          <Text style={styles.diagVal}>{isNoiseFilterEnabled ? 'AI KRISP (ON)' : 'OFF'}</Text>
+        </View>
+        <View style={styles.diagRow}>
           <Text style={styles.diagLabel}>Local Track Published:</Text>
           <Text style={styles.diagVal}>{isLocalTrackPublished ? 'YES' : 'NO'}</Text>
         </View>
@@ -267,16 +321,16 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
           <Text style={styles.diagVal}>{remoteParticipantConnected ? 'YES' : 'NO (Waiting)'}</Text>
         </View>
         <View style={styles.diagRow}>
-          <Text style={styles.diagLabel}>Remote Audio Subscribed:</Text>
-          <Text style={styles.diagVal}>{subscribedTracks.length > 0 ? 'YES' : 'NO'}</Text>
+          <Text style={styles.diagLabel}>Deafened (Incoming Muted):</Text>
+          <Text style={styles.diagVal}>{isDeafened ? 'YES' : 'NO'}</Text>
+        </View>
+        <View style={styles.diagRow}>
+          <Text style={styles.diagLabel}>Screenshare Stream Subscribed:</Text>
+          <Text style={styles.diagVal}>{screenshareSubscribed ? 'YES' : 'NO'}</Text>
         </View>
         <View style={styles.diagRow}>
           <Text style={styles.diagLabel}>Audio Route:</Text>
           <Text style={styles.diagVal}>{isSpeakerOn ? 'SPEAKERPHONE' : 'EARPIECE / WIRED'}</Text>
-        </View>
-        <View style={styles.diagRow}>
-          <Text style={styles.diagLabel}>Audio Stream Tx/Rx:</Text>
-          <Text style={styles.diagVal}>ACTIVE (WebRTC Streaming)</Text>
         </View>
       </View>
     );
@@ -290,6 +344,13 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
 
   const peerName = activeCall.peerName || (activeCall.roomName.includes('_') ? activeCall.roomName.split('_')[2] : 'Peer');
   const peerInitials = peerName.substring(0, 2).toUpperCase();
+
+  // Find if any peer is screensharing
+  const activeScreenshare = subscribedVideoTracks.find(
+    (vt) => vt.publication?.source === 'screen_share' || vt.track?.source === 'screen_share'
+  );
+
+  const isPeerSpeaking = activeSpeakers.some((identity) => identity !== roomRef.current?.localParticipant.identity);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -312,52 +373,124 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
       {renderDiagnostics()}
 
       <View style={styles.centerArea}>
-        {/* Pulsing ring animation effect when ringing */}
-        {!isConnected && (
-          <View style={styles.pulseRing} />
-        )}
-        <View style={[styles.avatarCircle, isConnected && styles.avatarConnected]}>
-          <Text style={styles.avatarText}>{peerInitials}</Text>
-        </View>
-        <Text style={styles.participantName}>{peerName}</Text>
-        <Text style={[styles.callStatus, isConnected && styles.callStatusConnected]}>
-          {isConnected ? formatDuration(duration) : 'Ringing...'}
-        </Text>
-        {isConnected && (
-          <View style={styles.liveBadge}>
-            <Volume2 size={12} color={COLORS.success} />
-            <Text style={styles.liveText}>LIVE AUDIO</Text>
+        {activeScreenshare ? (
+          <View style={styles.screenshareContainer}>
+            <VideoView
+              track={activeScreenshare.track}
+              style={styles.screenshareVideo}
+            />
+            <View style={styles.screenshareLabelBox}>
+              <Tv size={14} color={COLORS.success} />
+              <Text style={styles.screenshareLabelText}>
+                {activeScreenshare.participant.name || 'User'} is sharing their screen
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.avatarWrapper}>
+            {!isConnected && <View style={styles.pulseRing} />}
+            <View style={[
+              styles.avatarCircle, 
+              isConnected && styles.avatarConnected,
+              isPeerSpeaking && styles.avatarSpeaking
+            ]}>
+              <Text style={styles.avatarText}>{peerInitials}</Text>
+            </View>
+            <Text style={styles.participantName}>{peerName}</Text>
+            
+            {/* Call participants grid representation for multi-party calls */}
+            {participantsList.length > 0 && (
+              <View style={styles.participantsGrid}>
+                {participantsList.map((p) => {
+                  const isSpeaking = activeSpeakers.includes(p.identity);
+                  const initials = (p.name || 'User').substring(0, 2).toUpperCase();
+                  return (
+                    <View key={p.identity} style={styles.gridParticipantCard}>
+                      <View style={[
+                        styles.gridAvatar,
+                        isSpeaking && styles.gridAvatarSpeaking
+                      ]}>
+                        <Text style={styles.gridAvatarText}>{initials}</Text>
+                      </View>
+                      <Text style={styles.gridParticipantName} numberOfLines={1}>
+                        {p.name || 'User'}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
+            <Text style={[styles.callStatus, isConnected && styles.callStatusConnected]}>
+              {isConnected ? formatDuration(duration) : 'Ringing...'}
+            </Text>
+            {isConnected && (
+              <View style={styles.liveBadge}>
+                <Volume2 size={12} color={COLORS.success} />
+                <Text style={styles.liveText}>LIVE AUDIO</Text>
+              </View>
+            )}
           </View>
         )}
       </View>
 
       <View style={styles.controlBar}>
+        {/* Mic Toggle Button */}
         <TouchableOpacity
           onPress={handleToggleMute}
           style={[styles.controlBtn, activeCall.isMuted && styles.activeBtn]}
         >
           {activeCall.isMuted ? (
-            <MicOff size={22} color="#FFF" />
+            <MicOff size={20} color="#FFF" />
           ) : (
-            <Mic size={22} color={COLORS.textPrimary} />
+            <Mic size={20} color={COLORS.textPrimary} />
           )}
         </TouchableOpacity>
 
+        {/* Speaker Button */}
         <TouchableOpacity
           onPress={handleToggleSpeaker}
           style={[styles.controlBtn, isSpeakerOn && styles.activeBtn]}
         >
-          <Volume2 size={22} color={isSpeakerOn ? '#FFF' : COLORS.textPrimary} />
+          <Volume2 size={20} color={isSpeakerOn ? '#FFF' : COLORS.textPrimary} />
         </TouchableOpacity>
 
+        {/* Deafen Button */}
+        <TouchableOpacity
+          onPress={handleToggleDeafen}
+          style={[styles.controlBtn, isDeafened && styles.activeBtn]}
+        >
+          {isDeafened ? (
+            <VolumeX size={20} color="#FFF" />
+          ) : (
+            <Headphones size={20} color={COLORS.textPrimary} />
+          )}
+        </TouchableOpacity>
+
+        {/* Screenshare Button */}
+        <TouchableOpacity
+          onPress={handleToggleScreenShare}
+          style={[styles.controlBtn, isLocalScreenShareEnabled && styles.activeBtn]}
+        >
+          <Tv size={20} color={isLocalScreenShareEnabled ? '#FFF' : COLORS.textPrimary} />
+        </TouchableOpacity>
+
+        {/* Noise Suppression indicator toggle */}
+        <TouchableOpacity
+          onPress={handleToggleNoiseFilter}
+          style={[styles.controlBtn, isNoiseFilterEnabled && styles.activeBtn]}
+        >
+          <Activity size={20} color={isNoiseFilterEnabled ? '#FFF' : COLORS.textPrimary} />
+        </TouchableOpacity>
+
+        {/* Hangup Button */}
         <TouchableOpacity onPress={handleEndCall} style={styles.hangupBtn}>
-          <PhoneOff size={26} color="#FFF" />
+          <PhoneOff size={22} color="#FFF" />
         </TouchableOpacity>
       </View>
 
       {/* Render remote audio tracks to direct WebRTC streaming to speakers */}
-      {subscribedTracks.map((track) => {
-        const { AudioTrack } = require('@livekit/react-native');
+      {!isDeafened && subscribedTracks.map((track) => {
         return <AudioTrack key={track.sid} track={track} />;
       })}
     </SafeAreaView>
@@ -400,12 +533,18 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    width: '100%',
+  },
+  avatarWrapper: {
+    alignItems: 'center',
+    width: '100%',
   },
   pulseRing: {
     position: 'absolute',
-    width: 160,
-    height: 160,
-    borderRadius: 80,
+    top: 0,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     borderWidth: 2,
     borderColor: 'rgba(59, 130, 246, 0.3)',
   },
@@ -421,11 +560,15 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   avatarConnected: {
+    borderColor: COLORS.primary,
+  },
+  avatarSpeaking: {
     borderColor: COLORS.success,
     shadowColor: COLORS.success,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
+    shadowOpacity: 0.6,
+    shadowRadius: 16,
+    borderWidth: 3,
   },
   avatarText: {
     color: COLORS.accent,
@@ -436,6 +579,48 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     fontSize: 15,
     fontWeight: '600',
+    marginBottom: 10,
+  },
+  participantsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    marginVertical: 14,
+    gap: 12,
+    maxWidth: width - 80,
+  },
+  gridParticipantCard: {
+    alignItems: 'center',
+    width: 60,
+  },
+  gridAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.secondaryBackground,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderWidth: 1.5,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  gridAvatarSpeaking: {
+    borderColor: COLORS.success,
+    borderWidth: 2,
+    shadowColor: COLORS.success,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+  },
+  gridAvatarText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  gridParticipantName: {
+    color: COLORS.textMuted,
+    fontSize: 10,
+    marginTop: 4,
+    textAlign: 'center',
   },
   callStatus: {
     color: COLORS.primary,
@@ -468,15 +653,16 @@ const styles = StyleSheet.create({
   },
   controlBar: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 60,
+    paddingHorizontal: 20,
     paddingBottom: Platform.OS === 'ios' ? 44 : 28,
+    width: '100%',
   },
   controlBtn: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: COLORS.card,
     borderColor: COLORS.border,
     borderWidth: 1,
@@ -488,9 +674,9 @@ const styles = StyleSheet.create({
     borderColor: COLORS.danger,
   },
   hangupBtn: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: COLORS.danger,
     justifyContent: 'center',
     alignItems: 'center',
@@ -531,6 +717,33 @@ const styles = StyleSheet.create({
   diagVal: {
     color: '#FFF',
     fontSize: 11,
+    fontWeight: '600',
+  },
+  screenshareContainer: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: '#000',
+    justifyContent: 'center',
+  },
+  screenshareVideo: {
+    width: '100%',
+    height: '100%',
+  },
+  screenshareLabelBox: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  screenshareLabelText: {
+    color: '#FFF',
+    fontSize: 12,
+    marginLeft: 8,
     fontWeight: '600',
   },
 });
