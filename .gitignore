@@ -11,3 +11,9 @@ jdk17/
 jdk17.zip
 cmdline-tools.zip
 uschat.apk
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+uploads/
+
