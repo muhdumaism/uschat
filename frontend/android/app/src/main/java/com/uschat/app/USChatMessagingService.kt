@@ -1,5 +1,6 @@
 package com.uschat.app
 
+import android.app.ActivityManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -72,12 +73,14 @@ class USChatMessagingService : FirebaseMessagingService() {
                 val messageText = data["message"] ?: "Encrypted transmission"
                 val avatar = data["avatar"] ?: ""
 
-                // Active chat suppression check
-                val sharedPrefs = getSharedPreferences("USChatPrefs", Context.MODE_PRIVATE)
-                val activeChatId = sharedPrefs.getString("active_chat_id", null)
-                if (activeChatId == chatId) {
-                    Log.d(TAG, "[USChatMessagingService] User is actively viewing chat $chatId. Suppressing message notification.")
-                    return
+                // Active chat suppression check (only suppress if app is actively in the foreground)
+                if (isAppInForeground()) {
+                    val sharedPrefs = getSharedPreferences("USChatPrefs", Context.MODE_PRIVATE)
+                    val activeChatId = sharedPrefs.getString("active_chat_id", null)
+                    if (activeChatId == chatId) {
+                        Log.d(TAG, "[USChatMessagingService] User is actively viewing chat $chatId in foreground. Suppressing message notification.")
+                        return
+                    }
                 }
 
                 Log.d(TAG, "[USChatMessagingService] Showing message notification for Chat: $chatId, Sender: $senderName")
@@ -174,5 +177,22 @@ class USChatMessagingService : FirebaseMessagingService() {
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)
         }
+    }
+
+    private fun isAppInForeground(): Boolean {
+        try {
+            val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val appProcesses = activityManager.runningAppProcesses ?: return false
+            val packageName = packageName
+            for (appProcess in appProcesses) {
+                if (appProcess.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND &&
+                    appProcess.processName == packageName) {
+                    return true
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking if app is in foreground", e)
+        }
+        return false
     }
 }
