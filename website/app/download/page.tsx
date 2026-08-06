@@ -20,15 +20,16 @@ export default function DownloadPage() {
             </div>
             <h3>ANDROID MOBILE CLIENT</h3>
             <p style={{ marginBottom: '24px', color: '#A1A1AA', fontSize: '13px', fontWeight: '700', letterSpacing: '1px' }}>
-              APK COMPILE v1.0.0 (ARM64)
+              APK COMPILE v1.0.8 (ARM64/DEBUG)
             </p>
-            <button 
-              onClick={() => triggerAlert('USCHAT_1.0.0_ARM64.apk')} 
+            <a 
+              href="https://uschat.ruptyl.space/uploads/uschat.apk"
+              download
               className="brutalist-btn" 
-              style={{ width: '100%', cursor: 'pointer' }}
+              style={{ display: 'block', textDecoration: 'none', textAlign: 'center', width: '100%', cursor: 'pointer' }}
             >
               DOWNLOAD APK FILE
-            </button>
+            </a>
           </div>
         </div>
       </div>
