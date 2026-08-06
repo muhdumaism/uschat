@@ -120,14 +120,38 @@ class USChatModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
     }
 
     @ReactMethod
-    fun setActiveChatId(chatId: String?) {
+    fun setActiveChatId(chatIdVal: Dynamic) {
         val sharedPrefs = reactApplicationContext.getSharedPreferences("USChatPrefs", Context.MODE_PRIVATE)
-        if (chatId != null) {
+        val chatId = if (chatIdVal.type == ReadableType.String) chatIdVal.asString() else null
+        if (chatId != null && chatId.isNotEmpty()) {
             sharedPrefs.edit().putString("active_chat_id", chatId).apply()
         } else {
             sharedPrefs.edit().remove("active_chat_id").apply()
         }
-        Log.d(TAG, "Active chat ID set in SharedPreferences to: $chatId")
+        Log.d(TAG, "Active chat ID set in SharedPreferences dynamically to: $chatId")
+    }
+
+    @ReactMethod
+    fun clearChatNotifications(chatId: String) {
+        try {
+            val manager = reactApplicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            manager.cancel(chatId.hashCode())
+        } catch (e: Exception) {
+            Log.e(TAG, "Error clearing notifications for chat $chatId", e)
+        }
+    }
+
+    @ReactMethod
+    fun setBoolPreference(key: String, value: Boolean) {
+        val sharedPrefs = reactApplicationContext.getSharedPreferences("USChatPrefs", Context.MODE_PRIVATE)
+        sharedPrefs.edit().putBoolean(key, value).apply()
+        Log.d(TAG, "SharedPreferences set preference: $key = $value")
+    }
+
+    @ReactMethod
+    fun getBoolPreference(key: String, defaultValue: Boolean, promise: Promise) {
+        val sharedPrefs = reactApplicationContext.getSharedPreferences("USChatPrefs", Context.MODE_PRIVATE)
+        promise.resolve(sharedPrefs.getBoolean(key, defaultValue))
     }
 
     @ReactMethod

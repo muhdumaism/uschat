@@ -19,7 +19,9 @@ class USChatMessagingService : FirebaseMessagingService() {
 
     companion object {
         private const val TAG = "USChatMessagingService"
-        const val CHANNEL_MESSAGES_ID = "messages"
+        const val CHANNEL_CUSTOM = "messages_custom"
+        const val CHANNEL_DEFAULT = "messages_default"
+        const val CHANNEL_SILENT = "messages_silent"
         const val GROUP_KEY_MESSAGES = "com.uschat.app.MESSAGES"
     }
 
@@ -77,65 +79,41 @@ class USChatMessagingService : FirebaseMessagingService() {
         }
 
         val type = data["type"] ?: return
+        if (type == "message") {
+            val chatId = data["chatId"] ?: return
+            val senderId = data["senderId"] ?: return
+            val senderName = data["title"] ?: "New Message"
+            val messageText = data["body"] ?: ""
 
-        when (type) {
-            "incoming_call" -> {
-                val callId = data["callId"] ?: ""
-                val chatId = data["chatId"] ?: ""
-                val callerId = data["callerId"] ?: ""
-                val callerName = data["callerName"] ?: "Secured Caller"
-                val roomName = data["roomName"] ?: ""
-                val callType = data["callType"] ?: "AUDIO"
-                val avatar = data["avatar"] ?: ""
-
-                Log.d(TAG, "[USChatMessagingService] Routing call to USChatCallService. CallID: $callId, Caller: $callerName")
-                val intent = Intent(this, USChatCallService::class.java).apply {
-                    putExtra(USChatCallService.EXTRA_CALL_ID, callId)
-                    putExtra(USChatCallService.EXTRA_CHAT_ID, chatId)
-                    putExtra(USChatCallService.EXTRA_CALLER_ID, callerId)
-                    putExtra(USChatCallService.EXTRA_CALLER_NAME, callerName)
-                    putExtra(USChatCallService.EXTRA_ROOM_NAME, roomName)
-                    putExtra(USChatCallService.EXTRA_CALL_TYPE, callType)
-                    putExtra(USChatCallService.EXTRA_AVATAR, avatar)
+            // Active chat suppression check (only suppress if app is actively in the foreground)
+            if (isAppInForeground()) {
+                val sharedPrefs = getSharedPreferences("USChatPrefs", Context.MODE_PRIVATE)
+                val activeChatId = sharedPrefs.getString("active_chat_id", null)
+                if (activeChatId == chatId) {
+                    Log.d(TAG, "[USChatMessagingService] User is actively viewing chat $chatId in foreground. Suppressing message notification.")
+                    return
                 }
-                USChatCallService.start(this, intent)
             }
-            "call_cancelled" -> {
-                val callId = data["callId"] ?: ""
-                Log.d(TAG, "[USChatMessagingService] Call cancelled by caller. Stopping CallService for CallID: $callId")
-                USChatCallService.stop(this, callId)
-            }
-            "message" -> {
-                val chatId = data["conversationId"] ?: data["chatId"] ?: ""
-                val senderId = data["senderId"] ?: ""
-                val senderName = data["senderName"] ?: "New Message"
-                val messageText = data["message"] ?: "Encrypted transmission"
-                val avatar = data["avatar"] ?: ""
 
-                // Active chat suppression check (only suppress if app is actively in the foreground)
-                if (isAppInForeground()) {
-                    val sharedPrefs = getSharedPreferences("USChatPrefs", Context.MODE_PRIVATE)
-                    val activeChatId = sharedPrefs.getString("active_chat_id", null)
-                    if (activeChatId == chatId) {
-                        Log.d(TAG, "[USChatMessagingService] User is actively viewing chat $chatId in foreground. Suppressing message notification.")
-                        return
-                    }
-                }
-
-                Log.d(TAG, "[USChatMessagingService] Showing message notification for Chat: $chatId, Sender: $senderName")
-                showMessageNotification(chatId, senderId, senderName, messageText, avatar)
-            }
-            "missed_call" -> {
-                val chatId = data["chatId"] ?: ""
-                val callerName = data["callerName"] ?: "Someone"
-                Log.d(TAG, "[USChatMessagingService] Displaying missed call notification from $callerName")
-                showMissedCallNotification(chatId, callerName)
-            }
+            Log.d(TAG, "[USChatMessagingService] Showing message notification for Chat: $chatId, Sender: $senderName")
+            showMessageNotification(chatId, senderId, senderName, messageText)
         }
     }
 
-    private fun showMessageNotification(chatId: String, senderId: String, senderName: String, messageText: String, avatar: String) {
-        createMessagesChannel()
+    private fun showMessageNotification(chatId: String, senderId: String, senderName: String, messageText: String) {
+        createNotificationChannels()
+
+        val sharedPrefs = getSharedPreferences("USChatPrefs", Context.MODE_PRIVATE)
+        val soundEnabled = sharedPrefs.getBoolean("sound_enabled", true)
+        val vibrationEnabled = sharedPrefs.getBoolean("vibration_enabled", true)
+        val useCustomSound = sharedPrefs.getBoolean("custom_sound_enabled", true)
+        val isMuted = sharedPrefs.getBoolean("mute_chat_$chatId", false)
+
+        val channelId = when {
+            isMuted || !soundEnabled -> CHANNEL_SILENT
+            useCustomSound -> CHANNEL_CUSTOM
+            else -> CHANNEL_DEFAULT
+        }
 
         val notificationId = chatId.hashCode()
 
@@ -149,72 +127,103 @@ class USChatMessagingService : FirebaseMessagingService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
         )
 
+        val soundId = resources.getIdentifier("notification_message", "raw", packageName)
+        val soundUri = if (soundId != 0 && useCustomSound && soundEnabled && !isMuted) {
+            android.net.Uri.parse("android.resource://" + packageName + "/" + soundId)
+        } else if (soundEnabled && !isMuted) {
+            android.provider.Settings.System.DEFAULT_NOTIFICATION_URI
+        } else {
+            null
+        }
+
         // Summary notification for grouping
-        val summaryNotification = NotificationCompat.Builder(this, CHANNEL_MESSAGES_ID)
+        val summaryNotification = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.sym_action_chat)
             .setContentTitle("USChat")
             .setContentText("New messages")
             .setGroup(GROUP_KEY_MESSAGES)
             .setGroupSummary(true)
             .setAutoCancel(true)
+            .apply {
+                if (soundUri != null) {
+                    setSound(soundUri)
+                }
+            }
             .build()
 
-        val notification = NotificationCompat.Builder(this, CHANNEL_MESSAGES_ID)
+        val notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle(senderName)
             .setContentText(messageText)
             .setSmallIcon(android.R.drawable.sym_action_chat)
             .setContentIntent(pendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setPriority(if (channelId == CHANNEL_SILENT) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setGroup(GROUP_KEY_MESSAGES)
             .setAutoCancel(true)
+            .apply {
+                if (soundUri != null) {
+                    setSound(soundUri)
+                }
+                if (!vibrationEnabled || isMuted) {
+                    setVibrate(null)
+                } else {
+                    setVibrate(longArrayOf(0, 250, 250, 250))
+                }
+            }
             .build()
 
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(notificationId, notification)
         manager.notify(999, summaryNotification)
-        Log.d(TAG, "[USChatMessagingService] Message notification displayed. ID: $notificationId")
+        Log.d(TAG, "[USChatMessagingService] Message notification displayed via $channelId. ID: $notificationId")
     }
 
-    private fun showMissedCallNotification(chatId: String, callerName: String) {
-        createMessagesChannel()
-
-        val notificationId = (chatId + "_missed").hashCode()
-
-        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra("chatId", chatId)
-            putExtra("action", "open_chat")
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            this, notificationId, launchIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-        )
-
-        val notification = NotificationCompat.Builder(this, CHANNEL_MESSAGES_ID)
-            .setContentTitle("Missed Call")
-            .setContentText("Missed call from $callerName")
-            .setSmallIcon(android.R.drawable.sym_action_call)
-            .setContentIntent(pendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setAutoCancel(true)
-            .build()
-
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(notificationId, notification)
-        Log.d(TAG, "[USChatMessagingService] Missed call notification displayed. ID: $notificationId")
-    }
-
-    private fun createMessagesChannel() {
+    private fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name = "Chat Messages"
-            val descriptionText = "Shows incoming chat messages"
-            val importance = NotificationManager.IMPORTANCE_HIGH
-            val channel = NotificationChannel(CHANNEL_MESSAGES_ID, name, importance).apply {
-                description = descriptionText
-            }
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannel(channel)
+            
+            // 1. Custom Sound Channel
+            if (manager.getNotificationChannel(CHANNEL_CUSTOM) == null) {
+                val channel = NotificationChannel(CHANNEL_CUSTOM, "Chat Messages (Custom Tone)", NotificationManager.IMPORTANCE_HIGH).apply {
+                    description = "Plays custom USCHAT message tone"
+                    enableVibration(true)
+                    vibrationPattern = longArrayOf(0, 250, 250, 250)
+                }
+                try {
+                    val soundId = resources.getIdentifier("notification_message", "raw", packageName)
+                    if (soundId != 0) {
+                        val soundUri = android.net.Uri.parse("android.resource://" + packageName + "/" + soundId)
+                        val audioAttributes = android.media.AudioAttributes.Builder()
+                            .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT)
+                            .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build()
+                        channel.setSound(soundUri, audioAttributes)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error setting sound for custom channel", e)
+                }
+                manager.createNotificationChannel(channel)
+            }
+
+            // 2. Default System Sound Channel
+            if (manager.getNotificationChannel(CHANNEL_DEFAULT) == null) {
+                val channel = NotificationChannel(CHANNEL_DEFAULT, "Chat Messages (System Tone)", NotificationManager.IMPORTANCE_HIGH).apply {
+                    description = "Plays system default notification tone"
+                    enableVibration(true)
+                    vibrationPattern = longArrayOf(0, 250, 250, 250)
+                }
+                manager.createNotificationChannel(channel)
+            }
+
+            // 3. Silent Channel
+            if (manager.getNotificationChannel(CHANNEL_SILENT) == null) {
+                val channel = NotificationChannel(CHANNEL_SILENT, "Chat Messages (Silent)", NotificationManager.IMPORTANCE_LOW).apply {
+                    description = "Shows chat notifications silently without sound or vibration"
+                    enableVibration(false)
+                    setSound(null, null)
+                }
+                manager.createNotificationChannel(channel)
+            }
         }
     }
 

@@ -36,4 +36,10 @@ export const config = {
   firebase: {
     serviceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT || './firebase-service-account.json',
   },
+  uploadLimits: {
+    image: parseInt(process.env.LIMIT_IMAGE || String(10 * 1024 * 1024), 10),
+    video: parseInt(process.env.LIMIT_VIDEO || String(100 * 1024 * 1024), 10),
+    voice: parseInt(process.env.LIMIT_VOICE || String(25 * 1024 * 1024), 10),
+    document: parseInt(process.env.LIMIT_DOCUMENT || String(50 * 1024 * 1024), 10),
+  },
 };

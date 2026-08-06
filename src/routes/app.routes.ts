@@ -14,6 +14,18 @@ export async function appRoutes(fastify: FastifyInstance) {
     });
   });
 
+  // Get application configuration (like upload limits)
+  fastify.get('/config', async (_request, reply) => {
+    return reply.send({
+      uploadLimits: {
+        image: parseInt(process.env.LIMIT_IMAGE || String(10 * 1024 * 1024), 10),
+        video: parseInt(process.env.LIMIT_VIDEO || String(100 * 1024 * 1024), 10),
+        voice: parseInt(process.env.LIMIT_VOICE || String(25 * 1024 * 1024), 10),
+        document: parseInt(process.env.LIMIT_DOCUMENT || String(50 * 1024 * 1024), 10),
+      }
+    });
+  });
+
   // Direct APK download route - SECURED via JWT (Header or Query token)
   fastify.get('/download', async (request, reply) => {
     let token = request.headers.authorization?.split(' ')[1];

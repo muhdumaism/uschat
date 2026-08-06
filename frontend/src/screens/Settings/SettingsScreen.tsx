@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Platform, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Platform, Alert, Switch, NativeModules } from 'react-native';
 import { ArrowLeft, Shield, Bell, Lock, Smartphone, HelpCircle, LogOut } from 'lucide-react-native';
 import { GlassCard } from '../../components/GlassCard';
 import { COLORS } from '../../theme/colors';
@@ -8,6 +8,49 @@ import { CURRENT_VERSION_NAME } from '../../services/updateService';
 
 export const SettingsScreen: React.FC<any> = ({ navigation }) => {
   const logout = useAuthStore((s) => s.logout);
+
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [vibrationEnabled, setVibrationEnabled] = useState(true);
+  const [customSoundEnabled, setCustomSoundEnabled] = useState(true);
+
+  useEffect(() => {
+    if (Platform.OS === 'android' && NativeModules.USChatModule) {
+      const loadPrefs = async () => {
+        try {
+          const sound = await NativeModules.USChatModule.getBoolPreference('sound_enabled', true);
+          const vib = await NativeModules.USChatModule.getBoolPreference('vibration_enabled', true);
+          const custom = await NativeModules.USChatModule.getBoolPreference('custom_sound_enabled', true);
+          setSoundEnabled(sound);
+          setVibrationEnabled(vib);
+          setCustomSoundEnabled(custom);
+        } catch (err) {
+          console.warn('Failed to load native preferences:', err);
+        }
+      };
+      loadPrefs();
+    }
+  }, []);
+
+  const toggleSound = (val: boolean) => {
+    setSoundEnabled(val);
+    if (Platform.OS === 'android' && NativeModules.USChatModule) {
+      NativeModules.USChatModule.setBoolPreference('sound_enabled', val);
+    }
+  };
+
+  const toggleVibration = (val: boolean) => {
+    setVibrationEnabled(val);
+    if (Platform.OS === 'android' && NativeModules.USChatModule) {
+      NativeModules.USChatModule.setBoolPreference('vibration_enabled', val);
+    }
+  };
+
+  const toggleCustomSound = (val: boolean) => {
+    setCustomSoundEnabled(val);
+    if (Platform.OS === 'android' && NativeModules.USChatModule) {
+      NativeModules.USChatModule.setBoolPreference('custom_sound_enabled', val);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -54,21 +97,55 @@ export const SettingsScreen: React.FC<any> = ({ navigation }) => {
         </GlassCard>
 
         <GlassCard style={[styles.card, { marginTop: 16 }]}>
-          <Text style={styles.sectionHeader}>Preferences & App Info</Text>
+          <Text style={styles.sectionHeader}>Notification Preferences</Text>
 
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => Alert.alert('Notifications', 'Push notifications enabled.')}
-            style={styles.settingItem}
-          >
-            <Bell size={20} color={COLORS.warning} />
-            <View style={styles.settingTextGroup}>
-              <Text style={styles.itemTitle}>Notifications</Text>
-              <Text style={styles.itemSub}>Sound, vibration, and call alerts</Text>
+          <View style={styles.settingItemRow}>
+            <View style={styles.settingTextGroupRow}>
+              <Text style={styles.itemTitle}>Notification Sounds</Text>
+              <Text style={styles.itemSub}>Play sounds for incoming messages</Text>
             </View>
-          </TouchableOpacity>
+            <Switch
+              value={soundEnabled}
+              onValueChange={toggleSound}
+              trackColor={{ false: '#767577', true: COLORS.primary }}
+              thumbColor={soundEnabled ? '#FFF' : '#f4f3f4'}
+            />
+          </View>
 
           <View style={styles.divider} />
+
+          <View style={styles.settingItemRow}>
+            <View style={styles.settingTextGroupRow}>
+              <Text style={styles.itemTitle}>Vibrate</Text>
+              <Text style={styles.itemSub}>Vibrate on incoming messages</Text>
+            </View>
+            <Switch
+              value={vibrationEnabled}
+              onValueChange={toggleVibration}
+              trackColor={{ false: '#767577', true: COLORS.primary }}
+              thumbColor={vibrationEnabled ? '#FFF' : '#f4f3f4'}
+            />
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.settingItemRow}>
+            <View style={styles.settingTextGroupRow}>
+              <Text style={styles.itemTitle}>Use Custom USCHAT Sound</Text>
+              <Text style={styles.itemSub}>Toggle custom WAV chime or system default</Text>
+            </View>
+            <Switch
+              value={customSoundEnabled}
+              onValueChange={toggleCustomSound}
+              trackColor={{ false: '#767577', true: COLORS.primary }}
+              thumbColor={customSoundEnabled ? '#FFF' : '#f4f3f4'}
+              disabled={!soundEnabled}
+            />
+          </View>
+        </GlassCard>
+
+        <GlassCard style={[styles.card, { marginTop: 16 }]}>
+          <Text style={styles.sectionHeader}>App Info</Text>
 
           <TouchableOpacity
             activeOpacity={0.8}
@@ -173,5 +250,15 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     marginLeft: 10,
+  },
+  settingItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+  },
+  settingTextGroupRow: {
+    flex: 1,
+    paddingRight: 10,
   },
 });

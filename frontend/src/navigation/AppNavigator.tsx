@@ -23,9 +23,13 @@ const OpenChatBridge = () => {
     const { USChatModule } = NativeModules;
     const eventEmitter = new NativeEventEmitter(USChatModule);
 
-    const handleOpenChatAction = (chatId: string) => {
-      console.log('[AppNavigator] Received native open chat action:', chatId);
-      if (chatId) {
+    const handleOpenChatAction = (data: any) => {
+      console.log('[AppNavigator] Received native open chat action raw:', data);
+      const chatId = typeof data === 'object' && data !== null ? data.chatId : data;
+      if (chatId && typeof chatId === 'string') {
+        try {
+          USChatModule.clearChatNotifications(chatId);
+        } catch (err) {}
         navigation.navigate('Chat', { chatId, name: 'Chat' });
       }
     };

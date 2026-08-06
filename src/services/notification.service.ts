@@ -132,6 +132,7 @@ export class NotificationService {
    */
   static async sendMessageNotification(
     chatId: string,
+    messageId: string,
     senderId: string,
     senderName: string,
     messageBody: string,
@@ -177,14 +178,15 @@ export class NotificationService {
           imageUrl: senderAvatar || undefined,
         }, {
           type: 'message',
+          chatId,
+          messageId,
           senderId,
-          conversationId: chatId,
-          senderName,
-          avatar: senderAvatar || '',
-          message: bodyText,
+          title: senderName,
+          body: bodyText,
+          image: senderAvatar || '',
           timestamp,
           badgeCount: String(unreadCount),
-        }, 'messages');
+        }, 'messages_custom');
       }
     } catch (err: any) {
       console.error('[NotificationService] sendMessageNotification error:', err.message);

@@ -16,9 +16,10 @@ import {
   Vibration,
   ActivityIndicator,
 } from 'react-native';
-import { ArrowLeft, Send, Eye, ShieldCheck, Lock, Reply, Trash2, Copy, Edit, Smile, Plus, Mic } from 'lucide-react-native';
+import { ArrowLeft, Send, Eye, ShieldCheck, Lock, Reply, Trash2, Copy, Edit, Smile, Plus, Mic, Bell, BellOff } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
+import * as FileSystem from 'expo-file-system';
 import { Audio } from 'expo-av';
 import { MessageBubble } from '../../components/MessageBubble';
 import { Avatar } from '../../components/Avatar';
@@ -49,9 +50,53 @@ const getReplyText = (msg: any) => {
 export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
   const { chatId, name, peerUsername } = route.params;
   const [inputText, setInputText] = useState('');
-  const [isViewOnce, setIsViewOnce] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profileData, setProfileData] = useState<any>(null);
+
+  // Dynamic upload limits configuration
+  const [uploadLimits, setUploadLimits] = useState({
+    image: 10 * 1024 * 1024,
+    video: 100 * 1024 * 1024,
+    voice: 25 * 1024 * 1024,
+    document: 50 * 1024 * 1024,
+  });
+
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const res = await apiClient.get('/app/config');
+        if (res.data?.uploadLimits) {
+          setUploadLimits(res.data.uploadLimits);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch dynamic upload limits config:', err);
+      }
+    };
+    fetchConfig();
+  }, []);
+
+  // Upload Progress & State tracker
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'failed'>('idle');
+  const [failedUploadData, setFailedUploadData] = useState<{ uri: string; caption?: string; isViewOnce?: boolean } | null>(null);
+  const activeXhrRef = useRef<XMLHttpRequest | null>(null);
+
+  // Chat mute status
+  const [isChatMuted, setIsChatMuted] = useState(false);
+
+  const toggleMuteChat = () => {
+    const nextState = !isChatMuted;
+    setIsChatMuted(nextState);
+    if (Platform.OS === 'android' && NativeModules.USChatModule) {
+      try {
+        NativeModules.USChatModule.setBoolPreference(`mute_chat_${chatId}`, nextState);
+      } catch (err) {}
+    }
+    Alert.alert(
+      nextState ? 'Chat Muted' : 'Chat Unmuted',
+      nextState ? 'Notifications for this chat will be silent.' : 'Notifications for this chat are restored.'
+    );
+  };
 
   // Fullscreen Image Modal State
   const [viewingImageUri, setViewingImageUri] = useState<string | null>(null);
@@ -191,6 +236,14 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
   const uploadVoiceMessage = async (uri: string, durationSecs: number, waveformData: number[]) => {
     setIsUploadingVoice(true);
     try {
+      const info = await FileSystem.getInfoAsync(uri);
+      if (info.exists && info.size > uploadLimits.voice) {
+        const limitMb = (uploadLimits.voice / (1024 * 1024)).toFixed(0);
+        Alert.alert('Oversized Audio', `This voice message exceeds the ${limitMb} MB upload limit.`);
+        setIsUploadingVoice(false);
+        return;
+      }
+
       const formData = new FormData();
       const filename = `voice_${Date.now()}.m4a`;
       formData.append('file', {
@@ -239,25 +292,6 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
     const mins = Math.floor(secs / 60);
     const remainingSecs = secs % 60;
     return `${mins}:${remainingSecs < 10 ? '0' : ''}${remainingSecs}`;
-  };
-
-  const handleLaunchCamera = async () => {
-    try {
-      const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permissionResult.granted) {
-        Alert.alert('Permission Denied', 'Camera access is required to take photos!');
-        return;
-      }
-      const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: false,
-        quality: 0.8,
-      });
-      if (!result.canceled && result.assets && result.assets[0]?.uri) {
-        setPreviewImageUri(result.assets[0].uri);
-      }
-    } catch (err) {
-      console.error('Camera launch error:', err);
-    }
   };
 
   const handleAttachmentOption = (option: string) => {
@@ -329,6 +363,8 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
     if (Platform.OS === 'android' && NativeModules.USChatModule) {
       try {
         NativeModules.USChatModule.setActiveChatId(chatId);
+        NativeModules.USChatModule.clearChatNotifications(chatId);
+        NativeModules.USChatModule.getBoolPreference(`mute_chat_${chatId}`, false).then(setIsChatMuted);
       } catch (err) {}
     }
 
@@ -363,14 +399,80 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
       setEditingMessageId(null);
       await editMessage(msgId, chatId, textToSend);
     } else {
-      const options: any = { viewOnce: isViewOnce };
+      const options: any = {};
       if (replyingToMessage) {
         options.replyToId = replyingToMessage.id;
         setReplyingToMessage(null);
       }
       await sendMessage(chatId, textToSend, options);
-      setIsViewOnce(false);
       scrollToBottom(true);
+    }
+  };
+
+  const validateAndProcessImage = async (uri: string): Promise<string | null> => {
+    try {
+      const info = await FileSystem.getInfoAsync(uri);
+      if (!info.exists) {
+        Alert.alert('Invalid File', 'This file does not exist or is corrupted.');
+        return null;
+      }
+
+      const filename = uri.toLowerCase();
+      const isSupported = filename.endsWith('.jpg') || filename.endsWith('.jpeg') || filename.endsWith('.png') || filename.endsWith('.webp');
+      if (!isSupported) {
+        Alert.alert('Unsupported Format', 'Please upload a JPG, JPEG, PNG, or WEBP image.');
+        return null;
+      }
+
+      if (info.size > uploadLimits.image) {
+        const currentSizeMb = (info.size / (1024 * 1024)).toFixed(2);
+        const limitSizeMb = (uploadLimits.image / (1024 * 1024)).toFixed(0);
+        return new Promise((resolve) => {
+          Alert.alert(
+            'Oversized Image',
+            `This image exceeds the ${limitSizeMb} MB upload limit (Current: ${currentSizeMb} MB).`,
+            [
+              {
+                text: 'Choose Another',
+                style: 'cancel',
+                onPress: () => resolve(null),
+              },
+              {
+                text: 'Compress & Send',
+                onPress: async () => {
+                  try {
+                    const result = await ImageManipulator.manipulateAsync(
+                      uri,
+                      [{ resize: { width: 1200 } }],
+                      { compress: 0.65, format: ImageManipulator.SaveFormat.JPEG }
+                    );
+                    const compInfo = await FileSystem.getInfoAsync(result.uri);
+                    if (compInfo.exists && compInfo.size <= uploadLimits.image) {
+                      resolve(result.uri);
+                    } else {
+                      const result2 = await ImageManipulator.manipulateAsync(
+                        result.uri,
+                        [{ resize: { width: 800 } }],
+                        { compress: 0.45, format: ImageManipulator.SaveFormat.JPEG }
+                      );
+                      resolve(result2.uri);
+                    }
+                  } catch (compErr) {
+                    console.error('Image compression error:', compErr);
+                    Alert.alert('Error', 'Failed to compress the selected image.');
+                    resolve(null);
+                  }
+                },
+              },
+            ]
+          );
+        });
+      }
+      return uri;
+    } catch (err) {
+      console.error('Validation error:', err);
+      Alert.alert('Validation Error', 'Failed to inspect file properties.');
+      return null;
     }
   };
 
@@ -389,81 +491,131 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
       });
 
       if (!result.canceled && result.assets && result.assets[0]?.uri) {
-        setPreviewImageUri(result.assets[0].uri);
+        const originalUri = result.assets[0].uri;
+        const processedUri = await validateAndProcessImage(originalUri);
+        if (processedUri) {
+          setPreviewImageUri(processedUri);
+        }
       }
     } catch (err: any) {
       console.error('Image pick error:', err);
     }
   };
 
-  const handleSendImage = async (uri: string, caption?: string) => {
+  const handleLaunchCamera = async () => {
     try {
-      let imageUri = uri;
-
-      // Compress and resize image to bypass server 1MB size limits
-      try {
-        const manipResult = await ImageManipulator.manipulateAsync(
-          imageUri,
-          [{ resize: { width: 1024 } }],
-          { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
-        );
-        imageUri = manipResult.uri;
-      } catch (manipErr) {
-        console.warn('Image manipulation failed, using original image:', manipErr);
-      }
-
-      const formData = new FormData();
-      const filename = imageUri.split('/').pop() || 'photo.jpg';
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : 'image/jpeg';
-
-      formData.append('file', {
-        uri: imageUri,
-        name: filename,
-        type,
-      } as any);
-
-      const token = useAuthStore.getState().token;
-
-      const response = await fetch(`${API_BASE_URL}/media/upload`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
-      });
-
-      const rawText = await response.text();
-      let uploadRes: any;
-      try {
-        uploadRes = JSON.parse(rawText);
-      } catch (parseErr) {
-        console.error('Upload JSON parse error:', parseErr, 'Raw response:', rawText);
-        Alert.alert('Upload Failed', `Server responded with status ${response.status}. Response: ${rawText.substring(0, 150)}`);
+      const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert('Permission Denied', 'Camera access is required to take photos!');
         return;
       }
-
-      if (uploadRes?.fileUrl) {
-        const options: any = { viewOnce: isViewOnce, messageType: 'IMAGE' };
-        if (replyingToMessage) {
-          options.replyToId = replyingToMessage.id;
-          setReplyingToMessage(null);
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: false,
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets && result.assets[0]?.uri) {
+        const originalUri = result.assets[0].uri;
+        const processedUri = await validateAndProcessImage(originalUri);
+        if (processedUri) {
+          setPreviewImageUri(processedUri);
         }
-        await sendMessage(chatId, uploadRes.fileUrl, options);
-        setIsViewOnce(false);
-
-        if (caption && caption.trim()) {
-          await sendMessage(chatId, caption.trim());
-        }
-
-        setPreviewImageUri(null);
-        scrollToBottom(true);
-      } else {
-        Alert.alert('Upload Error', uploadRes?.message || 'Failed to upload photo');
       }
-    } catch (err: any) {
-      console.error('Image upload error:', err);
-      Alert.alert('Upload Error', err.message || 'Failed to upload image');
+    } catch (err) {
+      console.error('Camera launch error:', err);
+    }
+  };
+
+  const handleSendImage = async (uri: string, caption?: string, isViewOnce = false) => {
+    setPreviewImageUri(null);
+    setUploadState('uploading');
+    setUploadProgress(0);
+    setFailedUploadData(null);
+
+    const formData = new FormData();
+    const filename = uri.split('/').pop() || 'photo.jpg';
+    const match = /\.(\w+)$/.exec(filename);
+    const type = match ? `image/${match[1]}` : 'image/jpeg';
+
+    formData.append('file', {
+      uri,
+      name: filename,
+      type,
+    } as any);
+
+    const token = useAuthStore.getState().token;
+    const xhr = new XMLHttpRequest();
+    activeXhrRef.current = xhr;
+
+    xhr.open('POST', `${API_BASE_URL}/media/upload`);
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        const percentage = Math.round((event.loaded / event.total) * 100);
+        setUploadProgress(percentage);
+      }
+    };
+
+    xhr.onload = async () => {
+      activeXhrRef.current = null;
+      if (xhr.status === 200 || xhr.status === 201) {
+        try {
+          const res = JSON.parse(xhr.responseText);
+          if (res?.fileUrl) {
+            setUploadState('idle');
+            setUploadProgress(null);
+
+            const options: any = { viewOnce: isViewOnce, messageType: 'IMAGE' };
+            if (replyingToMessage) {
+              options.replyToId = replyingToMessage.id;
+              setReplyingToMessage(null);
+            }
+            await sendMessage(chatId, res.fileUrl, options);
+            
+            if (caption && caption.trim()) {
+              await sendMessage(chatId, caption.trim());
+            }
+            scrollToBottom(true);
+          } else {
+            handleUploadFailure(uri, caption, isViewOnce);
+          }
+        } catch (err) {
+          handleUploadFailure(uri, caption, isViewOnce);
+        }
+      } else {
+        handleUploadFailure(uri, caption, isViewOnce);
+      }
+    };
+
+    xhr.onerror = () => {
+      activeXhrRef.current = null;
+      handleUploadFailure(uri, caption, isViewOnce);
+    };
+
+    xhr.send(formData);
+  };
+
+  const handleUploadFailure = (uri: string, caption?: string, isViewOnce = false) => {
+    setUploadState('failed');
+    setUploadProgress(null);
+    setFailedUploadData({ uri, caption, isViewOnce });
+    Alert.alert('Upload Failed', 'Failed to upload image. You can retry from the indicator banner.');
+  };
+
+  const cancelUpload = () => {
+    if (activeXhrRef.current) {
+      activeXhrRef.current.abort();
+      activeXhrRef.current = null;
+    }
+    setUploadState('idle');
+    setUploadProgress(null);
+    setFailedUploadData(null);
+  };
+
+  const retryUpload = () => {
+    if (failedUploadData) {
+      const { uri, caption, isViewOnce } = failedUploadData;
+      handleSendImage(uri, caption, isViewOnce);
     }
   };
 
@@ -500,6 +652,13 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
         </TouchableOpacity>
 
         <View style={styles.headerActions}>
+          <TouchableOpacity onPress={toggleMuteChat} style={styles.headerIcon}>
+            {isChatMuted ? (
+              <BellOff size={18} color="#FF3B30" />
+            ) : (
+              <Bell size={18} color={COLORS.textPrimary} />
+            )}
+          </TouchableOpacity>
           <TouchableOpacity onPress={handleOpenProfile} style={styles.headerIcon}>
             <ShieldCheck size={20} color={COLORS.primary} />
           </TouchableOpacity>
@@ -640,6 +799,29 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
                 <Mic size={20} color="#FFF" />
               </TouchableOpacity>
             )}
+          </View>
+        )}
+        {uploadState === 'uploading' && (
+          <View style={styles.uploadProgressBanner}>
+            <Text style={styles.uploadProgressText}>
+              Uploading Media ({uploadProgress}%)
+            </Text>
+            <TouchableOpacity onPress={cancelUpload} style={styles.uploadCancelBtn}>
+              <Text style={styles.uploadCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        {uploadState === 'failed' && (
+          <View style={styles.uploadProgressBanner}>
+            <Text style={styles.uploadProgressText}>Upload failed.</Text>
+            <View style={{ flexDirection: 'row' }}>
+              <TouchableOpacity onPress={retryUpload} style={[styles.uploadCancelBtn, { marginRight: 16 }]}>
+                <Text style={{ color: COLORS.primary, fontWeight: 'bold' }}>Retry</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={cancelUpload} style={styles.uploadCancelBtn}>
+                <Text style={styles.uploadCancelText}>Discard</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </KeyboardAvoidingView>
@@ -951,5 +1133,28 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     fontSize: 13,
     fontWeight: '600',
+  },
+  uploadProgressBanner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#1C1C1E',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#2C2C2E',
+  },
+  uploadProgressText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  uploadCancelBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  uploadCancelText: {
+    color: '#FF3B30',
+    fontWeight: 'bold',
   },
 });

@@ -131,6 +131,7 @@ export async function messageRoutes(fastify: FastifyInstance) {
     const senderName = message.sender?.displayName || message.sender?.username || 'Someone';
     NotificationService.sendMessageNotification(
       body.chatId,
+      message.id,
       request.user.id,
       senderName,
       body.encryptedContent,
