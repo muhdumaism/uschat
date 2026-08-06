@@ -6,10 +6,10 @@ export async function appRoutes(fastify: FastifyInstance) {
   // Check latest application version & metadata
   fastify.get('/version', async (_request, reply) => {
     return reply.send({
-      latestVersion: '1.0.3',
-      versionCode: 103,
+      latestVersion: '1.0.4',
+      versionCode: 104,
       downloadUrl: 'https://uschat.ruptyl.space/api/v1/app/download',
-      releaseNotes: '⚡ USCHAT v1.0.3 Release:\n- Fixed notification bar system tray drop bug by requesting POST_NOTIFICATIONS permission at runtime\n- Fixed Call Connection Failed WebRTC race condition inside CallScreen\n- Added in-app updater download progress with native install activity triggers',
+      releaseNotes: '⚡ USCHAT v1.0.4 Release:\n- Resolved chat view keyboard overlap and bottom message cutoff by enforcing flex:1 layout bounds on message FlatList\n- Expanded bottom list padding for cleaner message positioning',
       forceUpdate: false,
     });
   });

@@ -4,6 +4,7 @@ import { ArrowLeft, Shield, Bell, Lock, Smartphone, HelpCircle, LogOut } from 'l
 import { GlassCard } from '../../components/GlassCard';
 import { COLORS } from '../../theme/colors';
 import { useAuthStore } from '../../store/authStore';
+import { CURRENT_VERSION_NAME } from '../../services/updateService';
 
 export const SettingsScreen: React.FC<any> = ({ navigation }) => {
   const logout = useAuthStore((s) => s.logout);
@@ -71,13 +72,13 @@ export const SettingsScreen: React.FC<any> = ({ navigation }) => {
 
           <TouchableOpacity
             activeOpacity={0.8}
-            onPress={() => Alert.alert('USCHAT v2.5.0', 'Connected to https://uschat.ruptyl.space')}
+            onPress={() => Alert.alert(`USCHAT v${CURRENT_VERSION_NAME}`, 'Connected to https://uschat.ruptyl.space')}
             style={styles.settingItem}
           >
             <Smartphone size={20} color={COLORS.success} />
             <View style={styles.settingTextGroup}>
               <Text style={styles.itemTitle}>About USCHAT</Text>
-              <Text style={styles.itemSub}>Version 2.5.0 (Clean Minimal UI)</Text>
+              <Text style={styles.itemSub}>Version {CURRENT_VERSION_NAME} (Clean Minimal UI)</Text>
             </View>
           </TouchableOpacity>
         </GlassCard>
