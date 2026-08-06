@@ -16,4 +16,5 @@ uschat.apk
 *.db-wal
 *.db-shm
 uploads/
+uschat-*.json
 
