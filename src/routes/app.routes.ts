@@ -23,12 +23,12 @@ export async function appRoutes(fastify: FastifyInstance) {
     }
 
     return reply.send({
-      latestVersion: '1.0.8',
-      versionCode: 108,
+      latestVersion: '1.0.9',
+      versionCode: 109,
       downloadUrl: config.apkDownloadUrl,
       sha256: apkHash,
       fileSize: apkSize,
-      releaseNotes: '⚡ USCHAT v1.0.8 Release:\n- Added WhatsApp-style View Once image preview flow\n- Implemented dynamic media upload size limit checks\n- Built background download resumes and integrity checks\n- Complete redesign of the in-app automatic system updater',
+      releaseNotes: '⚡ USCHAT v1.0.9 Upgrade:\n- Fixed chat list automatic scrolling to bottom when opening conversations\n- Fixed voice message playback automatically looping after ending once\n- Updated the updater modal interface to match the dark premium layout theme',
       forceUpdate: false,
     });
   });
