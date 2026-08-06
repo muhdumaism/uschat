@@ -6,73 +6,22 @@ import { RegisterScreen } from '../screens/Auth/RegisterScreen';
 import { HomeScreen } from '../screens/Home/HomeScreen';
 import { ChatScreen } from '../screens/Chat/ChatScreen';
 import { CreateChatScreen } from '../screens/Chat/CreateChatScreen';
-import { CallScreen } from '../screens/Call/CallScreen';
 import { ProfileScreen } from '../screens/Profile/ProfileScreen';
 import { SettingsScreen } from '../screens/Settings/SettingsScreen';
-import { IncomingCallModal } from '../components/IncomingCallModal';
-import { useCallStore } from '../store/callStore';
 import { useNavigation } from '@react-navigation/native';
-import { ActivityIndicator, View, Alert, NativeEventEmitter, NativeModules, Platform } from 'react-native';
+import { ActivityIndicator, View, NativeEventEmitter, NativeModules, Platform } from 'react-native';
 import { COLORS } from '../theme/colors';
-import { apiClient } from '../api/client';
 
 const Stack = createNativeStackNavigator();
 
-const CallBridge = () => {
+const OpenChatBridge = () => {
   const navigation = useNavigation<any>();
-  const startCall = useCallStore((s) => s.startCall);
-
-  const handleAccept = async (incomingCall: any) => {
-    try {
-      const callId = incomingCall?.callId || incomingCall?.id;
-      const res = await apiClient.post(`/calls/${callId}/join`);
-
-      startCall({
-        callId,
-        chatId: incomingCall?.chatId,
-        roomName: res.data.call?.roomName || incomingCall?.roomName,
-        livekitToken: res.data.livekitToken,
-        wsUrl: res.data.wsUrl,
-        type: 'AUDIO',
-        isMuted: false,
-        isConnected: true, // callee is immediately connected
-        peerName: incomingCall?.initiatorName || incomingCall?.callerName || 'Caller',
-      });
-      navigation.navigate('CallScreen');
-    } catch (err: any) {
-      console.error('Join call error:', err);
-      Alert.alert('Call Failed', err.response?.data?.message || 'Unable to join call');
-    }
-  };
 
   useEffect(() => {
     if (Platform.OS !== 'android' || !NativeModules.USChatModule) return;
 
     const { USChatModule } = NativeModules;
     const eventEmitter = new NativeEventEmitter(USChatModule);
-
-    const handleCallAction = (data: any) => {
-      console.log('[AppNavigator] Received native call action:', data);
-      if (data.action === 'accept') {
-        handleAccept({
-          callId: data.callId,
-          chatId: data.chatId,
-          roomName: data.roomName,
-          type: data.callType,
-          initiatorName: data.callerName,
-        });
-      } else if (data.action === 'decline') {
-        useCallStore.getState().setIncomingCall(null);
-      } else if (data.action === 'show') {
-        useCallStore.getState().setIncomingCall({
-          callId: data.callId,
-          chatId: data.chatId,
-          roomName: data.roomName,
-          type: data.callType,
-          initiatorName: data.callerName,
-        });
-      }
-    };
 
     const handleOpenChatAction = (chatId: string) => {
       console.log('[AppNavigator] Received native open chat action:', chatId);
@@ -82,12 +31,6 @@ const CallBridge = () => {
     };
 
     // 1. Process initial actions (cold-start)
-    USChatModule.getInitialCallAction().then((data: any) => {
-      if (data) {
-        handleCallAction(data);
-      }
-    });
-
     USChatModule.getInitialOpenChatAction().then((chatId: string | null) => {
       if (chatId) {
         handleOpenChatAction(chatId);
@@ -95,16 +38,14 @@ const CallBridge = () => {
     });
 
     // 2. Add event listeners for warm-starts
-    const callSub = eventEmitter.addListener('onCallAction', handleCallAction);
     const chatSub = eventEmitter.addListener('onOpenChat', handleOpenChatAction);
 
     return () => {
-      callSub.remove();
       chatSub.remove();
     };
   }, []);
 
-  return <IncomingCallModal onAccept={handleAccept} />;
+  return null;
 };
 
 export const AppNavigator = () => {
@@ -135,13 +76,12 @@ export const AppNavigator = () => {
             <Stack.Screen name="Home" component={HomeScreen} />
             <Stack.Screen name="Chat" component={ChatScreen} />
             <Stack.Screen name="CreateChat" component={CreateChatScreen} />
-            <Stack.Screen name="CallScreen" component={CallScreen} />
             <Stack.Screen name="Profile" component={ProfileScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
           </>
         )}
       </Stack.Navigator>
-      {isAuthenticated && <CallBridge />}
+      {isAuthenticated && <OpenChatBridge />}
     </>
   );
 };

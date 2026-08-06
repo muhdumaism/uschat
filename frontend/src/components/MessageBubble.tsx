@@ -4,6 +4,7 @@ import { Eye, Lock, CheckCheck, Reply } from 'lucide-react-native';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { COLORS } from '../theme/colors';
 import { ChatMessage } from '../store/chatStore';
+import { VoiceMessageBubble } from './VoiceMessageBubble';
 
 export interface MessageBubbleProps {
   message: ChatMessage;
@@ -158,14 +159,25 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       );
     }
 
+    const isVoice = message.messageType === 'VOICE';
+    let voicePayload: { audioUrl: string; duration: number; waveform: number[] } | null = null;
+    if (isVoice && message.decryptedText) {
+      try {
+        voicePayload = JSON.parse(message.decryptedText);
+      } catch (err) {
+        console.warn('Failed to parse voice message JSON payload:', err);
+      }
+    }
+
     const isImage =
-      message.messageType === 'IMAGE' ||
-      (message.decryptedText &&
-        message.decryptedText.startsWith('http') &&
-        (message.decryptedText.includes('/uploads/') ||
-          message.decryptedText.endsWith('.jpg') ||
-          message.decryptedText.endsWith('.png') ||
-          message.decryptedText.endsWith('.jpeg')));
+      !isVoice &&
+      (message.messageType === 'IMAGE' ||
+        (message.decryptedText &&
+          message.decryptedText.startsWith('http') &&
+          (message.decryptedText.includes('/uploads/') ||
+            message.decryptedText.endsWith('.jpg') ||
+            message.decryptedText.endsWith('.png') ||
+            message.decryptedText.endsWith('.jpeg'))));
 
     const imageUri = message.decryptedText || message.encryptedContent;
 
@@ -178,7 +190,16 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           style={[styles.bubble, isMe ? styles.myBubble : styles.peerBubble]}
         >
           {renderReplyPreview()}
-          {isImage ? (
+          {isVoice && voicePayload ? (
+            <VoiceMessageBubble
+              audioUrl={voicePayload.audioUrl}
+              duration={voicePayload.duration}
+              waveform={voicePayload.waveform}
+              isSender={isMe}
+              timestamp={time}
+              isViewed={message.isViewed}
+            />
+          ) : isImage ? (
             <TouchableOpacity
               activeOpacity={0.9}
               delayLongPress={180}

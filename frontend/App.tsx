@@ -7,16 +7,12 @@ if (typeof global.TextEncoder === 'undefined') {
 }
 
 import React from 'react';
-import { registerGlobals } from '@livekit/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Platform, PermissionsAndroid } from 'react-native';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { useChatStore } from './src/store/chatStore';
-
-// Register LiveKit WebRTC globals before any Room usage
-registerGlobals();
 
 async function requestNotificationPermission() {
   if (Platform.OS !== 'android') return;

@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import { apiClient } from '../api/client';
 import { SignalEngine } from '../crypto/signalEngine';
 import { WebSocketClient } from '../api/wsClient';
-import { useCallStore } from './callStore';
 import { NativeModules, Platform } from 'react-native';
 
 export interface ChatMessage {
@@ -354,12 +353,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
           }
           return { onlineUsers: updated };
         });
-      } else if (event === 'INCOMING_CALL') {
-        useCallStore.getState().setIncomingCall(payload);
-      } else if (event === 'CALL_ACCEPTED') {
-        useCallStore.getState().setCallConnected();
-      } else if (event === 'CALL_ENDED') {
-        useCallStore.getState().endCall();
       }
     });
   },

@@ -192,96 +192,6 @@ export class NotificationService {
   }
 
   /**
-   * Send high-priority incoming call push notification (wakes phone screen and triggers ring UI)
-   */
-  static async sendIncomingCallNotification(
-    chatId: string,
-    callId: string,
-    callerId: string,
-    callerName: string,
-    roomName: string,
-    callType: string = 'AUDIO',
-    callerAvatar?: string | null,
-  ) {
-    try {
-      console.log(`[NotificationService] Creating incoming call notification from ${callerName} (Call ID: ${callId}) in Chat ${chatId}`);
-      const members = await prisma.chatMember.findMany({
-        where: { chatId, userId: { not: callerId } },
-        select: { userId: true },
-      });
-
-      for (const member of members) {
-        console.log(`[NotificationService] Dispatching incoming call notification to user ${member.userId}`);
-        await this.sendToUser(member.userId, {
-          title: callerName,
-          body: callType === 'VIDEO' ? '📹 Incoming video call...' : '📞 Incoming voice call...',
-          imageUrl: callerAvatar || undefined,
-        }, {
-          type: 'incoming_call',
-          callId,
-          chatId,
-          callerId,
-          callerName,
-          callType,
-          roomName,
-          avatar: callerAvatar || '',
-        }, 'calls');
-      }
-    } catch (err: any) {
-      console.error('[NotificationService] sendIncomingCallNotification error:', err.message);
-    }
-  }
-
-  /**
-   * Send call cancelled push notification (dismisses incoming call ring UI on all recipient devices)
-   */
-  static async sendCallCancelledNotification(chatId: string, callId: string, callerId: string) {
-    try {
-      console.log(`[NotificationService] Creating call cancelled notification for Call ID: ${callId}`);
-      const members = await prisma.chatMember.findMany({
-        where: { chatId, userId: { not: callerId } },
-        select: { userId: true },
-      });
-
-      for (const member of members) {
-        console.log(`[NotificationService] Dispatching call cancellation to user ${member.userId}`);
-        await this.sendToUser(member.userId, undefined, {
-          type: 'call_cancelled',
-          callId,
-          chatId,
-        }, 'calls');
-      }
-    } catch (err: any) {
-      console.error('[NotificationService] sendCallCancelledNotification error:', err.message);
-    }
-  }
-
-  /**
-   * Send missed call notification
-   */
-  static async sendMissedCallNotification(
-    chatId: string,
-    callId: string,
-    recipientId: string,
-    callerName: string,
-  ) {
-    try {
-      console.log(`[NotificationService] Creating missed call notification for user ${recipientId} from ${callerName}`);
-      await this.sendToUser(recipientId, {
-        title: 'Missed Call',
-        body: `Missed call from ${callerName}`,
-      }, {
-        type: 'missed_call',
-        callId,
-        chatId,
-        callerName,
-      }, 'missed_calls');
-    } catch (err: any) {
-      console.error('[NotificationService] sendMissedCallNotification error:', err.message);
-    }
-  }
-
-  /**
    * Core method: Dispatch FCM notification to all active devices of a target user
    */
   private static async sendToUser(
@@ -310,8 +220,6 @@ export class NotificationService {
 
     for (const { id, token, platform } of tokens) {
       try {
-        const isCallChannel = channelId === 'calls';
-
         const messagePayload: Message = {
           token,
           data: {
@@ -326,18 +234,18 @@ export class NotificationService {
           },
           android: {
             priority: 'high', // Always high priority for reliable background/killed delivery
-            ttl: isCallChannel ? 30000 : 3600000, // 30 seconds for calls, 1 hour for messages
+            ttl: 3600000, // 1 hour for messages
             // Data-only message for Android — native USChatMessagingService handles display
             // This prevents FCM SDK from auto-showing a duplicate notification
           },
           apns: {
             headers: {
-              'apns-priority': isCallChannel ? '10' : '5',
-              'apns-expiration': isCallChannel ? '30' : '3600',
+              'apns-priority': '5',
+              'apns-expiration': '3600',
             },
             payload: {
               aps: {
-                sound: isCallChannel ? 'ringtone.caf' : 'default',
+                sound: 'default',
                 badge: data.badgeCount ? parseInt(data.badgeCount, 10) : undefined,
                 contentAvailable: true,
               },

@@ -17,7 +17,6 @@ import { keysRoutes } from './routes/keys.routes';
 import { chatRoutes } from './routes/chat.routes';
 import { messageRoutes } from './routes/message.routes';
 import { mediaRoutes } from './routes/media.routes';
-import { callRoutes } from './routes/call.routes';
 import { adminRoutes } from './routes/admin.routes';
 import { notificationRoutes } from './routes/notification.routes';
 import { appRoutes } from './routes/app.routes';
@@ -61,7 +60,6 @@ export function buildApp() {
   app.register(chatRoutes, { prefix: '/api/v1/chats' });
   app.register(messageRoutes, { prefix: '/api/v1/messages' });
   app.register(mediaRoutes, { prefix: '/api/v1/media' });
-  app.register(callRoutes, { prefix: '/api/v1/calls' });
   app.register(adminRoutes, { prefix: '/api/v1/admin' });
   app.register(notificationRoutes, { prefix: '/api/v1/notifications' });
   app.register(appRoutes, { prefix: '/api/v1/app' });

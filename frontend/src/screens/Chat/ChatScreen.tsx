@@ -13,20 +13,23 @@ import {
   Modal,
   Clipboard,
   NativeModules,
+  Vibration,
+  ActivityIndicator,
 } from 'react-native';
-import { ArrowLeft, Phone, Send, Eye, ShieldCheck, Lock, Paperclip, Reply, Trash2, Copy, Edit } from 'lucide-react-native';
+import { ArrowLeft, Send, Eye, ShieldCheck, Lock, Reply, Trash2, Copy, Edit, Smile, Plus, Mic } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
+import { Audio } from 'expo-av';
 import { MessageBubble } from '../../components/MessageBubble';
 import { Avatar } from '../../components/Avatar';
 import { UserProfileModal } from '../../components/UserProfileModal';
 import { ImageViewerModal } from '../../components/ImageViewerModal';
 import { ImagePreviewModal } from '../../components/ImagePreviewModal';
-import { requestCallPermissions } from '../../components/IncomingCallModal';
+import { AttachmentSheet } from '../../components/AttachmentSheet';
+import { EmojiPickerModal } from '../../components/EmojiPickerModal';
 import { COLORS } from '../../theme/colors';
 import { useChatStore } from '../../store/chatStore';
 import { useAuthStore } from '../../store/authStore';
-import { useCallStore } from '../../store/callStore';
 import { apiClient } from '../../api/client';
 import { API_BASE_URL } from '../../api/config';
 import { WebSocketClient } from '../../api/wsClient';
@@ -65,7 +68,211 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
 
   const { messages, fetchMessages, sendMessage, editMessage, deleteMessage, reactToMessage } = useChatStore();
   const currentUser = useAuthStore((s) => s.user);
-  const startCall = useCallStore((s) => s.startCall);
+
+  // Voice recording states
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [recordingWaveform, setRecordingWaveform] = useState<number[]>([]);
+  const [recordingInstance, setRecordingInstance] = useState<Audio.Recording | null>(null);
+  const [isUploadingVoice, setIsUploadingVoice] = useState(false);
+
+  // Redesigned overlay states
+  const [showAttachmentSheet, setShowAttachmentSheet] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+  const startRecording = async () => {
+    try {
+      const permission = await Audio.requestPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Microphone Access Denied', 'Permission to access the microphone is required to record voice messages.');
+        return;
+      }
+
+      if (recordingInstance) {
+        await recordingInstance.stopAndUnloadAsync();
+      }
+
+      Vibration.vibrate([0, 80]);
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const recording = new Audio.Recording();
+      const recordingOptions = {
+        android: {
+          extension: '.m4a',
+          outputFormat: Audio.AndroidOutputFormat.MPEG_4,
+          audioEncoder: Audio.AndroidAudioEncoder.AAC,
+          sampleRate: 44100,
+          numberOfChannels: 1,
+          bitRate: 128000,
+        },
+        ios: {
+          extension: '.m4a',
+          audioQuality: Audio.IOSAudioQuality.HIGH,
+          sampleRate: 44100,
+          numberOfChannels: 1,
+          bitRate: 128000,
+          format: Audio.IOSOutputFormat.MPEG4AAC,
+        },
+        web: {},
+      };
+
+      recording.setOnRecordingStatusUpdate((status) => {
+        if (status.canRecord && status.isRecording) {
+          setRecordingDuration(Math.floor(status.durationMillis / 1000));
+          if (status.metering !== undefined) {
+            const db = status.metering;
+            const normalized = Math.max(0, 1 + db / 60);
+            setRecordingWaveform((prev) => [...prev, normalized]);
+          }
+        }
+      });
+
+      await recording.prepareToRecordAsync({
+        ...recordingOptions,
+        keepConnectionAlive: true,
+      } as any);
+      
+      await recording.setProgressUpdateInterval(100);
+      await recording.startAsync();
+
+      setRecordingInstance(recording);
+      setIsRecording(true);
+      setRecordingDuration(0);
+      setRecordingWaveform([]);
+    } catch (err) {
+      console.error('Failed to start recording:', err);
+      Alert.alert('Recording Failed', 'Could not access audio hardware.');
+    }
+  };
+
+  const cancelRecording = async () => {
+    if (!recordingInstance) return;
+    try {
+      Vibration.vibrate([0, 40, 40, 40]);
+      await recordingInstance.stopAndUnloadAsync();
+      setRecordingInstance(null);
+      setIsRecording(false);
+      setRecordingDuration(0);
+      setRecordingWaveform([]);
+    } catch (err) {
+      console.error('Failed to cancel recording:', err);
+    }
+  };
+
+  const finishRecording = async () => {
+    if (!recordingInstance) return;
+    try {
+      Vibration.vibrate(50);
+      await recordingInstance.stopAndUnloadAsync();
+      const uri = recordingInstance.getURI();
+      const finalDuration = recordingDuration;
+      const finalWaveform = [...recordingWaveform];
+
+      setRecordingInstance(null);
+      setIsRecording(false);
+      setRecordingDuration(0);
+      setRecordingWaveform([]);
+
+      if (!uri) {
+        Alert.alert('Recording Error', 'Could not locate the voice message audio path.');
+        return;
+      }
+
+      uploadVoiceMessage(uri, finalDuration, finalWaveform);
+    } catch (err) {
+      console.error('Failed to finish recording:', err);
+    }
+  };
+
+  const uploadVoiceMessage = async (uri: string, durationSecs: number, waveformData: number[]) => {
+    setIsUploadingVoice(true);
+    try {
+      const formData = new FormData();
+      const filename = `voice_${Date.now()}.m4a`;
+      formData.append('file', {
+        uri,
+        name: filename,
+        type: 'audio/m4a',
+      } as any);
+
+      const token = useAuthStore.getState().token;
+      const response = await fetch(`${API_BASE_URL}/media/upload`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const rawText = await response.text();
+      let uploadRes: any;
+      try {
+        uploadRes = JSON.parse(rawText);
+      } catch (err) {
+        console.error('Voice upload parse error:', err, rawText);
+        return;
+      }
+
+      if (uploadRes?.fileUrl) {
+        const payloadString = JSON.stringify({
+          audioUrl: uploadRes.fileUrl,
+          duration: durationSecs || 1,
+          waveform: waveformData.length > 0 ? waveformData : [0.15, 0.2, 0.15],
+        });
+        await sendMessage(chatId, payloadString, { messageType: 'VOICE' } as any);
+      } else {
+        Alert.alert('Upload Error', uploadRes?.message || 'Failed to sync voice message to server.');
+      }
+    } catch (err: any) {
+      console.error('Voice upload error:', err);
+      Alert.alert('Network Error', 'Failed to upload voice message.');
+    } finally {
+      setIsUploadingVoice(false);
+    }
+  };
+
+  const formatDuration = (secs: number) => {
+    const mins = Math.floor(secs / 60);
+    const remainingSecs = secs % 60;
+    return `${mins}:${remainingSecs < 10 ? '0' : ''}${remainingSecs}`;
+  };
+
+  const handleLaunchCamera = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert('Permission Denied', 'Camera access is required to take photos!');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: false,
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets && result.assets[0]?.uri) {
+        setPreviewImageUri(result.assets[0].uri);
+      }
+    } catch (err) {
+      console.error('Camera launch error:', err);
+    }
+  };
+
+  const handleAttachmentOption = (option: string) => {
+    switch (option) {
+      case 'photos':
+        handlePickImage();
+        break;
+      case 'camera':
+        handleLaunchCamera();
+        break;
+      default:
+        Alert.alert('Coming Soon', `${option.toUpperCase()} share option will be available soon.`);
+        break;
+    }
+  };
 
   const chatMessages = (messages[chatId] || []).filter(
     (msg) => !msg.isDeletedForEveryone && msg.encryptedContent !== '[DELETED_MESSAGE]'
@@ -260,27 +467,7 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
     }
   };
 
-  const handleInitiateCall = async () => {
-    try {
-      await requestCallPermissions();
 
-      const res = await apiClient.post('/calls/initiate', { chatId, type: 'AUDIO' });
-      startCall({
-        callId: res.data.call.id,
-        chatId,
-        roomName: res.data.call.roomName,
-        livekitToken: res.data.livekitToken,
-        wsUrl: res.data.wsUrl,
-        type: 'AUDIO',
-        isMuted: false,
-        isConnected: false,
-        peerName: name,
-      });
-      navigation.navigate('CallScreen');
-    } catch (err: any) {
-      Alert.alert('Call Failed', err.response?.data?.message || 'Unable to initiate call');
-    }
-  };
 
   const handleCloseImageViewer = () => {
     if (isViewingOnce && viewingMsgId) {
@@ -315,9 +502,6 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
         <View style={styles.headerActions}>
           <TouchableOpacity onPress={handleOpenProfile} style={styles.headerIcon}>
             <ShieldCheck size={20} color={COLORS.primary} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={handleInitiateCall} style={styles.headerIcon}>
-            <Phone size={20} color={COLORS.textPrimary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -399,30 +583,65 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
             </TouchableOpacity>
           </View>
         )}
-        <View style={styles.inputBarContainer}>
-          <TouchableOpacity
-            onPress={() => setIsViewOnce(!isViewOnce)}
-            style={[styles.viewOnceBtn, isViewOnce && styles.viewOnceActive]}
-          >
-            <Eye size={18} color={isViewOnce ? COLORS.primary : COLORS.textMuted} />
-          </TouchableOpacity>
+        {isRecording ? (
+          <View style={styles.inputBarContainer}>
+            <View style={styles.pillContainer}>
+              <View style={styles.recordingDot} />
+              <Text style={styles.recordingText}>Recording {formatDuration(recordingDuration)}</Text>
+              
+              <TouchableOpacity onPress={cancelRecording} style={styles.recordingCancelBtn}>
+                <Text style={styles.recordingCancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
 
-          <TextInput
-            placeholder="Type a message..."
-            placeholderTextColor={COLORS.textMuted}
-            value={inputText}
-            onChangeText={setInputText}
-            style={styles.textInput}
-          />
+            <TouchableOpacity onPress={finishRecording} style={[styles.actionBtn, styles.micBtnActive]}>
+              <Send size={18} color="#FFF" />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.inputBarContainer}>
+            {isUploadingVoice && (
+              <ActivityIndicator size="small" color={COLORS.primary} style={{ marginRight: 8 }} />
+            )}
+            
+            <TouchableOpacity
+              onPress={() => setShowAttachmentSheet(true)}
+              style={styles.plusBtn}
+            >
+              <Plus size={20} color="#FFF" />
+            </TouchableOpacity>
 
-          <TouchableOpacity onPress={handlePickImage} style={styles.attachBtn}>
-            <Paperclip size={20} color={COLORS.textMuted} />
-          </TouchableOpacity>
+            <View style={styles.pillContainer}>
+              <TextInput
+                placeholder={peerUsername ? `Message @${name}` : 'Message'}
+                placeholderTextColor="#888"
+                value={inputText}
+                onChangeText={setInputText}
+                style={styles.textInput}
+              />
 
-          <TouchableOpacity onPress={handleSend} style={styles.sendBtn}>
-            <Send size={18} color="#FFF" />
-          </TouchableOpacity>
-        </View>
+              <TouchableOpacity
+                onPress={() => setShowEmojiPicker(true)}
+                style={styles.smileBtn}
+              >
+                <Smile size={20} color="#FFF" />
+              </TouchableOpacity>
+            </View>
+
+            {inputText.trim().length > 0 ? (
+              <TouchableOpacity onPress={handleSend} style={styles.actionBtn}>
+                <Send size={18} color="#FFF" />
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                onPress={startRecording}
+                style={styles.actionBtn}
+              >
+                <Mic size={20} color="#FFF" />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </KeyboardAvoidingView>
 
       {/* Fullscreen Photo Viewer */}
@@ -437,6 +656,18 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
         visible={showProfileModal}
         onClose={() => setShowProfileModal(false)}
         userData={profileData}
+      />
+
+      <AttachmentSheet
+        visible={showAttachmentSheet}
+        onClose={() => setShowAttachmentSheet(false)}
+        onSelectOption={handleAttachmentOption}
+      />
+
+      <EmojiPickerModal
+        visible={showEmojiPicker}
+        onClose={() => setShowEmojiPicker(false)}
+        onSelectEmoji={(emoji) => setInputText((prev) => prev + emoji)}
       />
 
       {/* Bottom Action Sheet for Message Interaction */}
@@ -645,63 +876,80 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 12,
-    backgroundColor: '#121212',
-    borderTopWidth: 3,
-    borderTopColor: '#FFFFFF',
+    paddingVertical: 10,
+    backgroundColor: '#0F0F0F',
+    borderTopWidth: 1,
+    borderTopColor: '#1A1A1A',
   },
-  viewOnceBtn: {
-    width: 38,
-    height: 38,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    borderRadius: 0,
-    backgroundColor: '#000000',
-    marginRight: 8,
+  pillContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E1E1E',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#2D2D2D',
+    paddingHorizontal: 16,
+    height: 46,
+    marginRight: 10,
+  },
+  plusBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  viewOnceActive: {
-    backgroundColor: COLORS.primary,
+    marginRight: 10,
   },
   textInput: {
     flex: 1,
-    color: '#FFFFFF',
+    color: '#FFF',
     fontSize: 14,
-    fontWeight: '600',
-    maxHeight: 100,
-    paddingHorizontal: 12,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    borderRadius: 0,
-    backgroundColor: '#000000',
-    height: 38,
+    height: '100%',
+    paddingVertical: 0,
+    margin: 0,
   },
-  attachBtn: {
-    width: 38,
-    height: 38,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    borderRadius: 0,
-    backgroundColor: '#000000',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 8,
+  smileBtn: {
+    padding: 6,
+    marginLeft: 6,
   },
-  sendBtn: {
+  actionBtn: {
     width: 44,
     height: 44,
-    borderRadius: 0,
+    borderRadius: 22,
     backgroundColor: COLORS.primary,
-    borderColor: '#FFFFFF',
-    borderWidth: 2.5,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 8,
-    shadowColor: '#FFFFFF',
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 3,
+  },
+  micBtnActive: {
+    backgroundColor: '#E53935',
+    shadowColor: '#E53935',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  recordingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#E53935',
+    marginRight: 8,
+  },
+  recordingText: {
+    color: '#E53935',
+    fontSize: 13,
+    fontWeight: 'bold',
+    flex: 1,
+  },
+  recordingCancelBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  recordingCancelText: {
+    color: COLORS.textMuted,
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

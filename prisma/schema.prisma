@@ -30,7 +30,6 @@ model User {
   preKeys               PreKey[]
   chatMembers           ChatMember[]
   sentMessages          Message[]     @relation("SentMessages")
-  initiatedCalls        Call[]        @relation("InitiatedCalls")
   reportsSubmitted      Report[]      @relation("ReportsSubmitted")
   reportsAgainst        Report[]      @relation("ReportsAgainst")
   pushTokens            PushToken[]
@@ -92,7 +91,6 @@ model Chat {
 
   members   ChatMember[]
   messages  Message[]
-  calls     Call[]
 }
 
 model ChatMember {
@@ -142,19 +140,6 @@ model Attachment {
   encryptedKey         String
   initializationVector String
   createdAt            DateTime @default(now())
-}
-
-model Call {
-  id          String    @id @default(uuid())
-  chatId      String
-  chat        Chat      @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  initiatorId String
-  initiator   User      @relation("InitiatedCalls", fields: [initiatorId], references: [id], onDelete: Cascade)
-  type        String    @default("AUDIO")
-  roomName    String    @unique
-  status      String    @default("RINGING")
-  startedAt   DateTime  @default(now())
-  endedAt     DateTime?
 }
 
 model Report {
