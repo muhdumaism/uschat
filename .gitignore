@@ -4,7 +4,6 @@ node_modules/
 dist/
 build/
 *.log
-.env
 android/app/build/
 android/.gradle/
 android-sdk/
