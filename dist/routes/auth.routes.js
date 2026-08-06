@@ -4,19 +4,19 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.authRoutes = authRoutes;
-const bcrypt_1 = __importDefault(require("bcrypt"));
+const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const zod_1 = require("zod");
 const client_1 = require("../prisma/client");
 const auth_middleware_1 = require("../middleware/auth.middleware");
 const registerSchema = zod_1.z.object({
     email: zod_1.z.string().email(),
-    username: zod_1.z.string().min(3).max(30).regex(/^[a-zA-Z0-9_]+$/, 'Username must be alphanumeric or underscore'),
-    password: zod_1.z.string().min(8),
-    displayName: zod_1.z.string().min(1).max(50),
+    username: zod_1.z.string().min(1),
+    password: zod_1.z.string().min(6),
+    displayName: zod_1.z.string().min(1),
     deviceName: zod_1.z.string().optional().default('Mobile Device'),
 });
 const loginSchema = zod_1.z.object({
-    email: zod_1.z.string().email(),
+    email: zod_1.z.string().min(1),
     password: zod_1.z.string(),
     deviceName: zod_1.z.string().optional().default('Mobile Device'),
 });
@@ -24,25 +24,33 @@ async function authRoutes(fastify) {
     // Register
     fastify.post('/register', async (request, reply) => {
         const body = registerSchema.parse(request.body);
-        const existingUser = await client_1.prisma.user.findFirst({
-            where: {
-                OR: [{ email: body.email.toLowerCase() }, { username: body.username.toLowerCase() }],
-            },
-        });
-        if (existingUser) {
-            if (existingUser.email === body.email.toLowerCase()) {
-                return reply.status(400).send({ error: 'Conflict', message: 'Email is already registered' });
-            }
-            return reply.status(400).send({ error: 'Conflict', message: 'Username is already taken' });
+        const cleanEmail = body.email.trim().toLowerCase();
+        let cleanUsername = body.username.trim().toLowerCase().replace(/[^a-zA-Z0-9_]/g, '_');
+        if (cleanUsername.length < 3) {
+            cleanUsername = `user_${Math.floor(1000 + Math.random() * 9000)}`;
         }
-        const passwordHash = await bcrypt_1.default.hash(body.password, 12);
+        const existingEmail = await client_1.prisma.user.findUnique({
+            where: { email: cleanEmail },
+        });
+        if (existingEmail) {
+            return reply.status(400).send({ error: 'Conflict', message: 'Email is already registered. Please log in instead.' });
+        }
+        // Auto-resolve username collisions if taken
+        let finalUsername = cleanUsername;
+        const existingUsername = await client_1.prisma.user.findUnique({
+            where: { username: finalUsername },
+        });
+        if (existingUsername) {
+            finalUsername = `${cleanUsername}_${Math.floor(100 + Math.random() * 900)}`;
+        }
+        const passwordHash = await bcryptjs_1.default.hash(body.password, 10);
         const verificationToken = Math.random().toString(36).substring(2) + Date.now().toString(36);
         const user = await client_1.prisma.user.create({
             data: {
-                email: body.email.toLowerCase(),
-                username: body.username.toLowerCase(),
+                email: cleanEmail,
+                username: finalUsername,
                 passwordHash,
-                displayName: body.displayName,
+                displayName: body.displayName.trim() || finalUsername,
                 verificationToken,
             },
         });
@@ -84,16 +92,22 @@ async function authRoutes(fastify) {
             refreshToken,
         });
     });
-    // Login
+    // Login (supports Username or Email)
     fastify.post('/login', async (request, reply) => {
         const body = loginSchema.parse(request.body);
-        const user = await client_1.prisma.user.findUnique({
-            where: { email: body.email.toLowerCase() },
+        const identifier = body.email.trim().toLowerCase();
+        const user = await client_1.prisma.user.findFirst({
+            where: {
+                OR: [
+                    { email: identifier },
+                    { username: identifier },
+                ],
+            },
         });
         if (!user) {
             return reply.status(401).send({ error: 'Unauthorized', message: 'Invalid credentials' });
         }
-        const validPassword = await bcrypt_1.default.compare(body.password, user.passwordHash);
+        const validPassword = await bcryptjs_1.default.compare(body.password, user.passwordHash);
         if (!validPassword) {
             return reply.status(401).send({ error: 'Unauthorized', message: 'Invalid credentials' });
         }

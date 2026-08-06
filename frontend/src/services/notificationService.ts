@@ -25,7 +25,7 @@ export const NativeNotificationService = {
    */
   registerFcmTokenWithBackend: async (fcmToken: string) => {
     try {
-      const userToken = await AsyncStorage.getItem('user_token');
+      const userToken = await AsyncStorage.getItem('@uschat/token');
       if (!userToken) return;
 
       await axios.post(
@@ -50,7 +50,7 @@ export const NativeNotificationService = {
    */
   unregisterFcmToken: async (fcmToken: string) => {
     try {
-      const userToken = await AsyncStorage.getItem('user_token');
+      const userToken = await AsyncStorage.getItem('@uschat/token');
       if (!userToken) return;
 
       await axios.post(

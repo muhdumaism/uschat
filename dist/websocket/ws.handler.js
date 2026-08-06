@@ -52,6 +52,27 @@ class WebSocketManager {
     static isUserOnline(userId) {
         return this.connections.has(userId);
     }
+    /**
+     * Check if user has a specific chat open (for notification suppression)
+     */
+    static isUserViewingChat(userId, chatId) {
+        const conns = this.connections.get(userId);
+        if (!conns)
+            return false;
+        return conns.some((c) => c.activeChatId === chatId);
+    }
+    /**
+     * Set the active chat for a user connection
+     */
+    static setUserActiveChat(userId, ws, chatId) {
+        const conns = this.connections.get(userId);
+        if (!conns)
+            return;
+        const conn = conns.find((c) => c.ws === ws);
+        if (conn) {
+            conn.activeChatId = chatId || undefined;
+        }
+    }
     static broadcastUserStatus(userId, isOnline) {
         client_1.prisma.chatMember.findMany({
             where: { userId },
@@ -100,12 +121,33 @@ function registerWebSocketRoutes(fastify) {
                             });
                             break;
                         case 'READ_RECEIPT':
+                            try {
+                                await client_1.prisma.message.updateMany({
+                                    where: {
+                                        chatId: payload.chatId,
+                                        senderId: { not: decoded.id },
+                                        isViewed: false,
+                                    },
+                                    data: {
+                                        isViewed: true,
+                                    },
+                                });
+                            }
+                            catch (err) {
+                                console.error('Error updating read receipts in database:', err);
+                            }
                             WebSocketManager.broadcastToChat(payload.chatId, decoded.id, 'READ_RECEIPT', {
                                 chatId: payload.chatId,
-                                messageId: payload.messageId,
                                 userId: decoded.id,
                                 readAt: new Date(),
                             });
+                            break;
+                        // Track which chat the user has open (for notification suppression)
+                        case 'CHAT_OPENED':
+                            WebSocketManager.setUserActiveChat(decoded.id, socket, payload.chatId);
+                            break;
+                        case 'CHAT_CLOSED':
+                            WebSocketManager.setUserActiveChat(decoded.id, socket, null);
                             break;
                         default:
                             break;

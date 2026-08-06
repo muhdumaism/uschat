@@ -76,10 +76,7 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
 
   const scrollToBottom = (animated = false) => {
     if (chatMessages.length > 0) {
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated });
-        hasInitialScroll.current = true;
-      }, 150);
+      flatListRef.current?.scrollToEnd({ animated });
     }
   };
   
@@ -114,6 +111,11 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
     fetchMessages(chatId);
     hasInitialScroll.current = false;
 
+    // Settle initial scroll lock after 1 second to allow layout rendering
+    const timer = setTimeout(() => {
+      hasInitialScroll.current = true;
+    }, 1000);
+
     // Notify websocket and native code that we opened this chat
     WebSocketClient.send('CHAT_OPENED', { chatId });
     WebSocketClient.send('READ_RECEIPT', { chatId });
@@ -124,6 +126,7 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
     }
 
     return () => {
+      clearTimeout(timer);
       WebSocketClient.send('CHAT_CLOSED', { chatId });
       if (Platform.OS === 'android' && NativeModules.USChatModule) {
         try {

@@ -6,10 +6,10 @@ export async function appRoutes(fastify: FastifyInstance) {
   // Check latest application version & metadata
   fastify.get('/version', async (_request, reply) => {
     return reply.send({
-      latestVersion: '1.0.5',
-      versionCode: 105,
+      latestVersion: '1.0.7',
+      versionCode: 107,
       downloadUrl: 'https://uschat.ruptyl.space/api/v1/app/download',
-      releaseNotes: '⚡ USCHAT v1.0.5 Release:\n- Fixed auto-installer failure by registering Android FileProvider authority and file paths\n- Fixed system tray notifications silent suppression bug when the app is in the background or closed',
+      releaseNotes: '⚡ USCHAT v1.0.7 Release:\n- Fixed critical bug where FCM push tokens were never registered with the backend (wrong AsyncStorage key)\n- Fixed token refresh: refreshed FCM tokens now auto-upload to backend\n- Fixed message notification delivery: upgraded to high-priority FCM for reliable background/killed delivery\n- Fixed duplicate notifications by switching to data-only FCM messages\n- Synced Android versionCode/versionName with app version',
       forceUpdate: false,
     });
   });

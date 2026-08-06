@@ -1,5 +1,6 @@
 @echo off
 set JAVA_HOME=G:\Uschat\jdk17\jdk-17.0.10+7
+set ANDROID_HOME=G:\Uschat\android-sdk
 set GRADLE_USER_HOME=G:\Uschat\.gradle
 set PATH=%JAVA_HOME%\bin;%PATH%
 
@@ -16,5 +17,7 @@ cd /d G:\Uschat\frontend\android
 echo Cleaning and Assembling Standalone Offline APK...
 call gradlew.bat clean assembleDebug
 
-echo Copying APK to G:\Uschat\uschat.apk...
+echo Copying APK to G:\Uschat\uschat.apk and uploads directory...
+if not exist "G:\Uschat\uploads" mkdir "G:\Uschat\uploads"
 copy /y G:\Uschat\frontend\android\app\build\outputs\apk\debug\app-debug.apk G:\Uschat\uschat.apk
+copy /y G:\Uschat\frontend\android\app\build\outputs\apk\debug\app-debug.apk G:\Uschat\uploads\uschat.apk

@@ -5,6 +5,7 @@ const zod_1 = require("zod");
 const client_1 = require("../prisma/client");
 const auth_middleware_1 = require("../middleware/auth.middleware");
 const ws_handler_1 = require("../websocket/ws.handler");
+const notification_service_1 = require("../services/notification.service");
 const sendMessageSchema = zod_1.z.object({
     chatId: zod_1.z.string(),
     encryptedContent: zod_1.z.string(),
@@ -45,6 +46,9 @@ async function messageRoutes(fastify) {
                         senderId: true,
                         encryptedContent: true,
                         messageType: true,
+                        sender: {
+                            select: { id: true, username: true, displayName: true, avatarUrl: true },
+                        },
                     },
                 },
             },
@@ -90,6 +94,17 @@ async function messageRoutes(fastify) {
             include: {
                 sender: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
                 attachments: true,
+                replyTo: {
+                    select: {
+                        id: true,
+                        senderId: true,
+                        encryptedContent: true,
+                        messageType: true,
+                        sender: {
+                            select: { id: true, username: true, displayName: true, avatarUrl: true },
+                        },
+                    },
+                },
             },
         });
         await client_1.prisma.chat.update({
@@ -97,6 +112,9 @@ async function messageRoutes(fastify) {
             data: { updatedAt: new Date() },
         });
         ws_handler_1.WebSocketManager.broadcastToChat(body.chatId, request.user.id, 'NEW_MESSAGE', message);
+        // Send FCM push notification to offline recipients
+        const senderName = message.sender?.displayName || message.sender?.username || 'Someone';
+        notification_service_1.NotificationService.sendMessageNotification(body.chatId, request.user.id, senderName, body.encryptedContent, body.messageType, message.sender?.avatarUrl);
         // Auto Bot Response if sending to @uschat_bot
         const chatMembers = await client_1.prisma.chatMember.findMany({
             where: { chatId: body.chatId },

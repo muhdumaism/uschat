@@ -12,7 +12,8 @@ const rate_limit_1 = __importDefault(require("@fastify/rate-limit"));
 const static_1 = __importDefault(require("@fastify/static"));
 const multipart_1 = __importDefault(require("@fastify/multipart"));
 const fs_1 = __importDefault(require("fs"));
-const bcrypt_1 = __importDefault(require("bcrypt"));
+const path_1 = __importDefault(require("path"));
+const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const zod_1 = require("zod");
 const config_1 = require("./config");
 const client_1 = require("./prisma/client");
@@ -24,6 +25,8 @@ const message_routes_1 = require("./routes/message.routes");
 const media_routes_1 = require("./routes/media.routes");
 const call_routes_1 = require("./routes/call.routes");
 const admin_routes_1 = require("./routes/admin.routes");
+const notification_routes_1 = require("./routes/notification.routes");
+const app_routes_1 = require("./routes/app.routes");
 const ws_handler_1 = require("./websocket/ws.handler");
 function buildApp() {
     const app = (0, fastify_1.default)({ logger: true });
@@ -49,7 +52,7 @@ function buildApp() {
     app.register(multipart_1.default, { limits: { fileSize: 100 * 1024 * 1024 } });
     app.register(rate_limit_1.default, { max: 200, timeWindow: '1 minute' });
     app.register(static_1.default, {
-        root: config_1.config.localStorageDir,
+        root: path_1.default.resolve(config_1.config.localStorageDir),
         prefix: '/uploads/',
     });
     app.register(auth_routes_1.authRoutes, { prefix: '/api/v1/auth' });
@@ -60,13 +63,15 @@ function buildApp() {
     app.register(media_routes_1.mediaRoutes, { prefix: '/api/v1/media' });
     app.register(call_routes_1.callRoutes, { prefix: '/api/v1/calls' });
     app.register(admin_routes_1.adminRoutes, { prefix: '/api/v1/admin' });
+    app.register(notification_routes_1.notificationRoutes, { prefix: '/api/v1/notifications' });
+    app.register(app_routes_1.appRoutes, { prefix: '/api/v1/app' });
     app.after(async () => {
         (0, ws_handler_1.registerWebSocketRoutes)(app);
         // Seed @uschat_bot system user
         try {
             const existingBot = await client_1.prisma.user.findUnique({ where: { username: 'uschat_bot' } });
             if (!existingBot) {
-                const hash = await bcrypt_1.default.hash('uschat_bot_password_123', 10);
+                const hash = await bcryptjs_1.default.hash('uschat_bot_password_123', 10);
                 await client_1.prisma.user.create({
                     data: {
                         email: 'bot@uschat.app',

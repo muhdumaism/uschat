@@ -11,6 +11,8 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 
 class USChatMessagingService : FirebaseMessagingService() {
@@ -25,6 +27,43 @@ class USChatMessagingService : FirebaseMessagingService() {
         Log.d(TAG, "[USChatMessagingService] onNewToken generated: $token")
         val sharedPrefs = getSharedPreferences("USChatPrefs", Context.MODE_PRIVATE)
         sharedPrefs.edit().putString("fcm_token", token).apply()
+
+        // Upload refreshed token to backend
+        val authToken = sharedPrefs.getString("auth_token", null)
+        val apiUrl = sharedPrefs.getString("api_url", null)
+        if (authToken != null && apiUrl != null) {
+            Log.d(TAG, "[USChatMessagingService] Uploading refreshed FCM token to backend...")
+            Thread {
+                try {
+                    val client = okhttp3.OkHttpClient.Builder()
+                        .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                        .writeTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                        .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                        .build()
+
+                    val mediaType = "application/json".toMediaType()
+                    val body = JSONObject().apply {
+                        put("token", token)
+                        put("platform", "android")
+                        put("deviceId", "android-${android.os.Build.VERSION.SDK_INT}")
+                    }.toString().toRequestBody(mediaType)
+
+                    val request = okhttp3.Request.Builder()
+                        .url("$apiUrl/notifications/register-token")
+                        .post(body)
+                        .addHeader("Authorization", "Bearer $authToken")
+                        .build()
+
+                    val response = client.newCall(request).execute()
+                    Log.d(TAG, "[USChatMessagingService] Token upload response: ${response.code}")
+                    response.close()
+                } catch (e: Exception) {
+                    Log.e(TAG, "[USChatMessagingService] Failed to upload refreshed FCM token", e)
+                }
+            }.start()
+        } else {
+            Log.w(TAG, "[USChatMessagingService] Cannot upload token: auth credentials not yet stored")
+        }
     }
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {

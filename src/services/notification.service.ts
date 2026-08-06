@@ -317,17 +317,18 @@ export class NotificationService {
           data: {
             ...data,
             channelId,
+            // Include notification display info in data so native handler can show it
+            ...(notification ? {
+              notifTitle: notification.title,
+              notifBody: notification.body,
+              ...(notification.imageUrl ? { notifImage: notification.imageUrl } : {}),
+            } : {}),
           },
           android: {
-            priority: isCallChannel ? 'high' : 'normal',
+            priority: 'high', // Always high priority for reliable background/killed delivery
             ttl: isCallChannel ? 30000 : 3600000, // 30 seconds for calls, 1 hour for messages
-            notification: notification ? {
-              channelId,
-              priority: isCallChannel ? 'max' : 'default',
-              sound: isCallChannel ? 'ringtone' : 'default',
-              visibility: 'public',
-              clickAction: 'FLUTTER_NOTIFICATION_CLICK',
-            } : undefined,
+            // Data-only message for Android — native USChatMessagingService handles display
+            // This prevents FCM SDK from auto-showing a duplicate notification
           },
           apns: {
             headers: {
@@ -344,7 +345,9 @@ export class NotificationService {
           },
         };
 
-        if (notification) {
+        // Only add top-level notification block for iOS (apns handles it)
+        // Android uses data-only to let onMessageReceived() handle display
+        if (notification && platform !== 'android') {
           messagePayload.notification = {
             title: notification.title,
             body: notification.body,
