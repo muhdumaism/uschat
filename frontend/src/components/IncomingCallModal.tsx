@@ -26,6 +26,9 @@ export const requestCallPermissions = async (isVideo: boolean = false): Promise<
   if (isVideo) {
     permissions.push(PermissionsAndroid.PERMISSIONS.CAMERA);
   }
+  if (Platform.OS === 'android' && Platform.Version >= 33) {
+    permissions.push('android.permission.POST_NOTIFICATIONS' as any);
+  }
 
   const recorded = await PermissionsAndroid.requestMultiple(permissions);
   const micGranted = recorded[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO];

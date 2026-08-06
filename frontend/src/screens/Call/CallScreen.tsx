@@ -19,6 +19,7 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
   const [remoteParticipantConnected, setRemoteParticipantConnected] = useState(false);
   const [subscribedTracks, setSubscribedTracks] = useState<any[]>([]);
   const [isSpeakerOn, setIsSpeakerOn] = useState(false);
+  const [hasCallPermissions, setHasCallPermissions] = useState(false);
 
   // Play outgoing ringback tone when screen mounts & request micro permissions
   useEffect(() => {
@@ -29,7 +30,9 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
     const checkPermissions = async () => {
       const { requestCallPermissions } = require('../../components/IncomingCallModal');
       const granted = await requestCallPermissions(false);
-      if (!granted) {
+      if (granted) {
+        setHasCallPermissions(true);
+      } else {
         Alert.alert('Permission Denied', 'Microphone permission is required for voice calls.');
         handleEndCall();
       }
@@ -164,7 +167,7 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
       }
     };
 
-    if (isConnected && activeCall?.livekitToken) {
+    if (isConnected && activeCall?.livekitToken && hasCallPermissions) {
       connectToRoom();
     }
 
@@ -179,7 +182,7 @@ export const CallScreen: React.FC<any> = ({ navigation }) => {
         }
       }
     };
-  }, [isConnected]);
+  }, [isConnected, hasCallPermissions]);
 
   // Call duration timer — only counts when connected
   useEffect(() => {

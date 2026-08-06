@@ -20,6 +20,19 @@ export const HomeScreen: React.FC<any> = ({ navigation }) => {
   useEffect(() => {
     fetchChats();
     initWsListeners();
+
+    // Prompt for notification permissions on Android 13+
+    const requestNotificationPermission = async () => {
+      if (Platform.OS === 'android' && Platform.Version >= 33) {
+        const { PermissionsAndroid } = require('react-native');
+        try {
+          await PermissionsAndroid.request('android.permission.POST_NOTIFICATIONS' as any);
+        } catch (err) {
+          console.warn('POST_NOTIFICATIONS permission request failed:', err);
+        }
+      }
+    };
+    requestNotificationPermission();
   }, []);
 
   const fetchCallHistory = async () => {

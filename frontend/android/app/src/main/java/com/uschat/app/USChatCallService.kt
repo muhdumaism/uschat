@@ -158,45 +158,69 @@ class USChatCallService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
         )
 
-        // Asynchronously fetch caller avatar and compile CallStyle notification
-        Thread {
-            val bitmap = getCircularBitmap(avatarUrl)
-            
-            val personBuilder = Person.Builder()
-                .setName(callerName)
-                .setImportant(true)
-            if (bitmap != null) {
-                personBuilder.setIcon(IconCompat.createWithBitmap(bitmap))
-            }
-            val person = personBuilder.build()
+        // 1. Build and display initial notification immediately on the main thread to satisfy Android OS constraints
+        val personBuilder = Person.Builder()
+            .setName(callerName)
+            .setImportant(true)
+        val person = personBuilder.build()
 
-            val notificationBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.sym_action_call)
-                .setContentTitle(callerName)
-                .setContentText(if (callType == "VIDEO") "Incoming video call..." else "Incoming voice call...")
-                .setPriority(NotificationCompat.PRIORITY_MAX)
-                .setCategory(NotificationCompat.CATEGORY_CALL)
-                .setFullScreenIntent(pendingLaunch, true)
-                .setOngoing(true)
-                .setAutoCancel(false)
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                notificationBuilder.setStyle(
-                    NotificationCompat.CallStyle.forIncomingCall(
-                        person,
-                        pendingDecline,
-                        pendingAccept
-                    )
+        val notificationBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.sym_action_call)
+            .setContentTitle(callerName)
+            .setContentText(if (callType == "VIDEO") "Incoming video call..." else "Incoming voice call...")
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setFullScreenIntent(pendingLaunch, true)
+            .setOngoing(true)
+            .setAutoCancel(false)
+            .setStyle(
+                NotificationCompat.CallStyle.forIncomingCall(
+                    person,
+                    pendingDecline,
+                    pendingAccept
                 )
-            } else {
-                notificationBuilder
-                    .addAction(android.R.drawable.ic_menu_call, "Accept", pendingAccept)
-                    .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Decline", pendingDecline)
-            }
+            )
 
-            val notification = notificationBuilder.build()
-            startForeground(NOTIFICATION_ID, notification)
-            Log.d(TAG, "[USChatCallService] CallStyle foreground notification started successfully")
+        val notification = notificationBuilder.build()
+        startForeground(NOTIFICATION_ID, notification)
+        Log.d(TAG, "[USChatCallService] startForeground called successfully on main thread")
+
+        // 2. Asynchronously download the avatar and refresh the notification
+        Thread {
+            try {
+                val bitmap = getCircularBitmap(avatarUrl)
+                if (bitmap != null) {
+                    val updatedPerson = Person.Builder()
+                        .setName(callerName)
+                        .setImportant(true)
+                        .setIcon(IconCompat.createWithBitmap(bitmap))
+                        .build()
+
+                    val updatedNotification = NotificationCompat.Builder(this, CHANNEL_ID)
+                        .setSmallIcon(android.R.drawable.sym_action_call)
+                        .setContentTitle(callerName)
+                        .setContentText(if (callType == "VIDEO") "Incoming video call..." else "Incoming voice call...")
+                        .setPriority(NotificationCompat.PRIORITY_MAX)
+                        .setCategory(NotificationCompat.CATEGORY_CALL)
+                        .setFullScreenIntent(pendingLaunch, true)
+                        .setOngoing(true)
+                        .setAutoCancel(false)
+                        .setStyle(
+                            NotificationCompat.CallStyle.forIncomingCall(
+                                updatedPerson,
+                                pendingDecline,
+                                pendingAccept
+                            )
+                        )
+                        .build()
+
+                    val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                    notificationManager.notify(NOTIFICATION_ID, updatedNotification)
+                    Log.d(TAG, "[USChatCallService] Notification updated with caller avatar successfully")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error updating notification avatar background thread", e)
+            }
         }.start()
 
         // Set Timeout for 30 seconds to automatically trigger missed call status

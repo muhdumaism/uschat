@@ -6,10 +6,10 @@ export async function appRoutes(fastify: FastifyInstance) {
   // Check latest application version & metadata
   fastify.get('/version', async (_request, reply) => {
     return reply.send({
-      latestVersion: '1.0.2',
-      versionCode: 102,
+      latestVersion: '1.0.3',
+      versionCode: 103,
       downloadUrl: 'https://uschat.ruptyl.space/api/v1/app/download',
-      releaseNotes: '⚡ USCHAT v1.0.2 Release:\n- Swipe to reply on incoming messages\n- Snappy long press actions (180ms)\n- WebRTC screenshot & recording blocker for View-Once photos\n- Persistent read receipts & seen checkmarks\n- Direct audio track rendering and native speaker toggles\n- Fixed native background calling and CallStyle notifications',
+      releaseNotes: '⚡ USCHAT v1.0.3 Release:\n- Fixed notification bar system tray drop bug by requesting POST_NOTIFICATIONS permission at runtime\n- Fixed Call Connection Failed WebRTC race condition inside CallScreen\n- Added in-app updater download progress with native install activity triggers',
       forceUpdate: false,
     });
   });
