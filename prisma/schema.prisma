@@ -82,15 +82,18 @@ model PreKey {
 }
 
 model Chat {
-  id        String       @id @default(uuid())
-  type      String       @default("DIRECT")
-  name      String?
-  avatar    String?
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+  id                  String       @id @default(uuid())
+  type                String       @default("DIRECT")
+  name                String?
+  avatar              String?
+  description         String?      @default("")
+  adminsOnlyMessaging Boolean      @default(false)
+  adminsOnlyInfoEdit  Boolean      @default(false)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
 
-  members   ChatMember[]
-  messages  Message[]
+  members             ChatMember[]
+  messages            Message[]
 }
 
 model ChatMember {
@@ -125,6 +128,7 @@ model Message {
   replies              Message[]    @relation("MessageReplies")
   isDeletedForEveryone Boolean      @default(false)
   reactions            String       @default("[]")
+  isPinned             Boolean      @default(false)
   createdAt            DateTime     @default(now())
 
   attachments          Attachment[]
@@ -171,4 +175,53 @@ model PushToken {
   createdAt  DateTime @default(now())
 
   @@index([userId])
+}
+
+model MessageRequest {
+  id         String   @id @default(uuid())
+  senderId   String
+  receiverId String
+  status     String   @default("PENDING") // "PENDING" | "ACCEPTED" | "DECLINED"
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([senderId, receiverId])
+}
+
+model Playlist {
+  id        String          @id @default(uuid())
+  userId    String
+  name      String
+  coverUrl  String?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  tracks    PlaylistTrack[]
+}
+
+model PlaylistTrack {
+  id         String   @id @default(uuid())
+  playlistId String
+  playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  title      String
+  artist     String
+  album      String?
+  duration   Int?     // seconds
+  coverUrl   String?
+  trackUri   String   // YouTube / SoundCloud watch link
+  position   Int
+  createdAt  DateTime @default(now())
+}
+
+model LikedSong {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  artist     String
+  album     String?
+  duration  Int?
+  coverUrl  String?
+  trackUri  String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, title, artist])
 }

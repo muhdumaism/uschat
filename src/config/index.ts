@@ -20,10 +20,14 @@ export const config = {
     accessKeyId: process.env.S3_ACCESS_KEY_ID || '',
     secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
   },
-  livekit: {
-    apiKey: process.env.LIVEKIT_API_KEY || 'devkey',
-    apiSecret: process.env.LIVEKIT_API_SECRET || 'secretsecretsecretsecretsecretsecret',
-    wsUrl: process.env.LIVEKIT_WS_URL || 'ws://localhost:7880',
+  lavalink: {
+    host: process.env.LAVALINK_HOST || 'localhost',
+    port: parseInt(process.env.LAVALINK_PORT || '2333', 10),
+    password: process.env.LAVALINK_PASSWORD || 'youshallnotpass',
+  },
+  spotify: {
+    clientId: process.env.SPOTIFY_CLIENT_ID || '',
+    clientSecret: process.env.SPOTIFY_CLIENT_SECRET || '',
   },
   smtp: {
     host: process.env.SMTP_HOST || 'smtp.ethereal.email',

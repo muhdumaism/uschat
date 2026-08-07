@@ -20,6 +20,8 @@ import { mediaRoutes } from './routes/media.routes';
 import { adminRoutes } from './routes/admin.routes';
 import { notificationRoutes } from './routes/notification.routes';
 import { appRoutes } from './routes/app.routes';
+import { requestRoutes } from './routes/request.routes';
+import { musicRoutes } from './routes/music.routes';
 import { registerWebSocketRoutes } from './websocket/ws.handler';
 
 export function buildApp() {
@@ -63,6 +65,8 @@ export function buildApp() {
   app.register(adminRoutes, { prefix: '/api/v1/admin' });
   app.register(notificationRoutes, { prefix: '/api/v1/notifications' });
   app.register(appRoutes, { prefix: '/api/v1/app' });
+  app.register(requestRoutes, { prefix: '/api/v1/requests' });
+  app.register(musicRoutes, { prefix: '/api/v1/music' });
 
   app.after(async () => {
     registerWebSocketRoutes(app);

@@ -183,4 +183,194 @@ export async function chatRoutes(fastify: FastifyInstance) {
 
     return reply.send({ success: true, isArchived });
   });
+
+  // Edit Group Settings
+  fastify.patch('/group/:chatId', { preHandler: [authenticate] }, async (request, reply) => {
+    const { chatId } = request.params as { chatId: string };
+    const body = z.object({
+      name: z.string().min(1).max(100).optional(),
+      description: z.string().max(250).optional(),
+      avatar: z.string().optional().nullable(),
+      adminsOnlyMessaging: z.boolean().optional(),
+      adminsOnlyInfoEdit: z.boolean().optional(),
+    }).parse(request.body);
+
+    const membership = await prisma.chatMember.findUnique({
+      where: { chatId_userId: { chatId, userId: request.user.id } },
+    });
+
+    if (!membership) {
+      return reply.status(403).send({ error: 'Forbidden', message: 'You are not a member of this chat' });
+    }
+
+    const chat = await prisma.chat.findUnique({ where: { id: chatId } });
+    if (!chat || chat.type !== 'GROUP') {
+      return reply.status(404).send({ error: 'Not Found', message: 'Group chat not found' });
+    }
+
+    // If adminsOnlyInfoEdit is true, only admins can edit settings
+    if (chat.adminsOnlyInfoEdit && membership.role !== 'ADMIN') {
+      return reply.status(403).send({ error: 'Forbidden', message: 'Only admins can modify this group settings' });
+    }
+
+    const updated = await prisma.chat.update({
+      where: { id: chatId },
+      data: body,
+    });
+
+    return reply.send(updated);
+  });
+
+  // Add Group Members
+  fastify.post('/group/:chatId/members', { preHandler: [authenticate] }, async (request, reply) => {
+    const { chatId } = request.params as { chatId: string };
+    const { usernames } = z.object({
+      usernames: z.array(z.string()).min(1),
+    }).parse(request.body);
+
+    const callerMembership = await prisma.chatMember.findUnique({
+      where: { chatId_userId: { chatId, userId: request.user.id } },
+    });
+
+    if (!callerMembership || callerMembership.role !== 'ADMIN') {
+      return reply.status(403).send({ error: 'Forbidden', message: 'Only group admins can add members' });
+    }
+
+    const users = await prisma.user.findMany({
+      where: { username: { in: usernames.map((u) => u.toLowerCase()) } },
+      select: { id: true, username: true },
+    });
+
+    const existingMembers = await prisma.chatMember.findMany({
+      where: {
+        chatId,
+        userId: { in: users.map((u) => u.id) },
+      },
+      select: { userId: true },
+    });
+    const existingUserIds = new Set(existingMembers.map((em) => em.userId));
+
+    const newMembersData = users
+      .filter((u) => !existingUserIds.has(u.id))
+      .map((u) => ({
+        chatId,
+        userId: u.id,
+        role: 'MEMBER',
+      }));
+
+    if (newMembersData.length > 0) {
+      await prisma.chatMember.createMany({
+        data: newMembersData,
+      });
+    }
+
+    return reply.send({ success: true, added: users.map((u) => u.username) });
+  });
+
+  // Remove Group Member
+  fastify.delete('/group/:chatId/members/:userId', { preHandler: [authenticate] }, async (request, reply) => {
+    const { chatId, userId } = request.params as { chatId: string; userId: string };
+
+    const callerMembership = await prisma.chatMember.findUnique({
+      where: { chatId_userId: { chatId, userId: request.user.id } },
+    });
+
+    if (!callerMembership || callerMembership.role !== 'ADMIN') {
+      return reply.status(403).send({ error: 'Forbidden', message: 'Only group admins can remove members' });
+    }
+
+    await prisma.chatMember.delete({
+      where: { chatId_userId: { chatId, userId } },
+    });
+
+    return reply.send({ success: true });
+  });
+
+  // Change Member Role
+  fastify.patch('/group/:chatId/members/:userId/role', { preHandler: [authenticate] }, async (request, reply) => {
+    const { chatId, userId } = request.params as { chatId: string; userId: string };
+    const { role } = z.object({
+      role: z.enum(['ADMIN', 'MEMBER']),
+    }).parse(request.body);
+
+    const callerMembership = await prisma.chatMember.findUnique({
+      where: { chatId_userId: { chatId, userId: request.user.id } },
+    });
+
+    if (!callerMembership || callerMembership.role !== 'ADMIN') {
+      return reply.status(403).send({ error: 'Forbidden', message: 'Only group admins can manage member roles' });
+    }
+
+    await prisma.chatMember.update({
+      where: { chatId_userId: { chatId, userId } },
+      data: { role },
+    });
+
+    return reply.send({ success: true });
+  });
+
+  // Leave Group
+  fastify.post('/group/:chatId/leave', { preHandler: [authenticate] }, async (request, reply) => {
+    const { chatId } = request.params as { chatId: string };
+
+    await prisma.chatMember.delete({
+      where: { chatId_userId: { chatId, userId: request.user.id } },
+    });
+
+    // Clean up group chat if no members remain
+    const membersCount = await prisma.chatMember.count({ where: { chatId } });
+    if (membersCount === 0) {
+      await prisma.chat.delete({ where: { id: chatId } });
+    }
+
+    return reply.send({ success: true });
+  });
+
+  // Pin/Unpin Message
+  fastify.post('/group/:chatId/pin/:messageId', { preHandler: [authenticate] }, async (request, reply) => {
+    const { chatId, messageId } = request.params as { chatId: string; messageId: string };
+
+    const callerMembership = await prisma.chatMember.findUnique({
+      where: { chatId_userId: { chatId, userId: request.user.id } },
+    });
+
+    if (!callerMembership) {
+      return reply.status(403).send({ error: 'Forbidden', message: 'You are not a member of this chat' });
+    }
+
+    const message = await prisma.message.findUnique({ where: { id: messageId } });
+    if (!message || message.chatId !== chatId) {
+      return reply.status(404).send({ error: 'Not Found', message: 'Message not found in this chat' });
+    }
+
+    const updated = await prisma.message.update({
+      where: { id: messageId },
+      data: { isPinned: !message.isPinned },
+    });
+
+    return reply.send({ success: true, isPinned: updated.isPinned });
+  });
+
+  // Get Pinned Messages
+  fastify.get('/group/:chatId/pins', { preHandler: [authenticate] }, async (request, reply) => {
+    const { chatId } = request.params as { chatId: string };
+
+    const callerMembership = await prisma.chatMember.findUnique({
+      where: { chatId_userId: { chatId, userId: request.user.id } },
+    });
+
+    if (!callerMembership) {
+      return reply.status(403).send({ error: 'Forbidden', message: 'You are not a member of this chat' });
+    }
+
+    const pins = await prisma.message.findMany({
+      where: { chatId, isPinned: true },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        sender: { select: { id: true, username: true, displayName: true } },
+      },
+    });
+
+    return reply.send(pins);
+  });
 }

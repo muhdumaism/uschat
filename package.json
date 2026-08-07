@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1104.0",
+    "@distube/ytdl-core": "^4.16.12",
     "@fastify/cors": "^8.5.0",
     "@fastify/jwt": "^8.0.0",
     "@fastify/multipart": "^8.3.1",
@@ -22,6 +23,7 @@
     "@prisma/client": "^5.10.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/ws": "^8.18.1",
+    "axios": "^1.19.0",
     "bcryptjs": "^3.0.3",
     "dotenv": "^16.4.5",
     "fastify": "^4.26.0",
