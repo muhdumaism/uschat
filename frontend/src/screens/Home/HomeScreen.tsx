@@ -9,6 +9,25 @@ import { Avatar } from '../../components/Avatar';
 import { useChatStore, ChatItem } from '../../store/chatStore';
 import { useMusicStore } from '../../store/musicStore';
 
+const getLastMessageText = (lastMsg: any) => {
+  if (!lastMsg) return '';
+  switch (lastMsg.messageType) {
+    case 'IMAGE': return '📷 Photo';
+    case 'VIDEO': return '🎥 Video';
+    case 'FILE': return '📄 Document';
+    case 'VOICE': return '🎤 Voice message';
+    case 'CALL_LOG': return '📞 Call';
+    default: {
+      const text = lastMsg.decryptedText || lastMsg.encryptedContent || '';
+      if (text.trim().startsWith('{') && text.includes('Url')) {
+        if (text.includes('audioUrl')) return '🎤 Voice message';
+        if (text.includes('fileUrl') || text.includes('imageUrl')) return '📷 Photo';
+      }
+      return text;
+    }
+  }
+};
+
 export const HomeScreen: React.FC<any> = ({ navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const { chats, fetchChats, setActiveChat, onlineUsers, initWsListeners } = useChatStore();
@@ -78,7 +97,7 @@ export const HomeScreen: React.FC<any> = ({ navigation }) => {
                 )}
                 {item.lastMessage && (
                   <Text style={[styles.lastMsgPreview, { color: colors.textSecondary }]} numberOfLines={1}>
-                    {item.lastMessage.encryptedContent}
+                    {getLastMessageText(item.lastMessage)}
                   </Text>
                 )}
               </View>
