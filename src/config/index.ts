@@ -1,7 +1,17 @@
 import dotenv from 'dotenv';
 import path from 'path';
 
-dotenv.config({ path: path.join(__dirname, '../../.env') });
+const envPath = path.join(__dirname, '../../.env');
+const result = dotenv.config({ path: envPath });
+
+console.log(`[Dotenv] Attempting to load .env from: ${envPath}`);
+if (result.error) {
+  console.error('[Dotenv] ❌ Error loading .env file:', result.error.message);
+} else {
+  console.log('[Dotenv] ✅ Loaded .env file successfully. Keys found:', Object.keys(result.parsed || {}));
+}
+console.log('[Dotenv] DATABASE_URL in process.env:', process.env.DATABASE_URL ? 'DEFINED (starts with: ' + process.env.DATABASE_URL.substring(0, 8) + '...)' : 'UNDEFINED ❌');
+
 
 export const config = {
   port: parseInt(process.env.PORT || '4000', 10),
