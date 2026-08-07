@@ -142,14 +142,10 @@ export async function musicRoutes(fastify: FastifyInstance) {
     const { uri } = z.object({ uri: z.string().url() }).parse(request.query);
     try {
       fastify.log.info({ uri }, '[MusicRouter] Resolving stream with yt-dlp-exec...');
-      const cookiesPath = path.join(process.cwd(), 'youtube_cookies.json');
       const ytDlpOptions: any = {
         getUrl: true,
         format: 'bestaudio',
       };
-      if (fs.existsSync(cookiesPath)) {
-        ytDlpOptions.cookies = cookiesPath;
-      }
 
       const streamUrl = (await ytdlExec(uri, ytDlpOptions)) as any;
       if (!streamUrl) {
