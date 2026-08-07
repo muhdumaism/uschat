@@ -158,11 +158,29 @@ export async function musicRoutes(fastify: FastifyInstance) {
     try {
       fastify.log.info({ uri }, '[MusicRouter] Resolving stream with yt-dlp-exec...');
 
+      const jsonCookiesPath = path.join(process.cwd(), 'youtube_cookies.json');
+      const netscapeCookiesPath = path.join(process.cwd(), 'youtube_cookies.txt');
+
+      // Convert JSON cookies to Netscape format on-the-fly for yt-dlp
+      if (fs.existsSync(jsonCookiesPath)) {
+        try {
+          const jsonCookies = JSON.parse(fs.readFileSync(jsonCookiesPath, 'utf8'));
+          const netscapeStr = convertJsonToNetscape(jsonCookies);
+          fs.writeFileSync(netscapeCookiesPath, netscapeStr, 'utf8');
+        } catch (err) {
+          fastify.log.warn(err, '[MusicRouter] Failed to convert JSON cookies to Netscape format');
+        }
+      }
+
       const ytDlpOptions: any = {
         getUrl: true,
         format: 'bestaudio',
         jsRuntimes: 'node:' + process.execPath,
       };
+
+      if (fs.existsSync(netscapeCookiesPath)) {
+        ytDlpOptions.cookies = netscapeCookiesPath;
+      }
 
       const streamUrl = (await ytdlExec(uri, ytDlpOptions)) as any;
       if (!streamUrl) {
