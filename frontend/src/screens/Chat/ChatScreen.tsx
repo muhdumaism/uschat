@@ -442,12 +442,15 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
         avatar: chatItem.avatar,
       };
     } else {
-      const otherMember = chatItem.members?.find((m: any) => m.user?.id !== currentUser?.id);
-      const peer = otherMember?.user;
+      const peer = chatItem.members?.find((m: any) => {
+        const uId = m?.user?.id || m?.id;
+        return uId && uId !== currentUser?.id;
+      });
+      const actualPeer = peer?.user || peer;
       return {
-        displayName: peer?.displayName || peer?.username || chatItem.name,
-        username: peer?.username,
-        avatar: peer?.avatarUrl,
+        displayName: actualPeer?.displayName || actualPeer?.username || chatItem.name,
+        username: actualPeer?.username,
+        avatar: actualPeer?.avatarUrl,
       };
     }
   }, [chatItem, name, peerUsername, currentUser]);
@@ -465,7 +468,11 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
       Alert.alert('Group Calls', 'Group voice calling is currently not supported.');
       return;
     }
-    const recipient = chatItem?.members?.find((m: any) => m.user?.id !== currentUser?.id)?.user;
+    const peer = chatItem?.members?.find((m: any) => {
+      const uId = m?.user?.id || m?.id;
+      return uId && uId !== currentUser?.id;
+    });
+    const recipient = peer?.user || peer;
     if (!recipient) {
       Alert.alert('Error', 'Unable to initiate call. Recipient not found.');
       return;
