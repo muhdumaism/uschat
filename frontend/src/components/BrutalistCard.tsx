@@ -23,8 +23,38 @@ export const BrutalistCard: React.FC<BrutalistCardProps> = ({
   borderWidth = BRUTALIST_STYLES.borderWidth,
   padding = 16,
 }) => {
+  // Extract layout/sizing styles to apply to both layers so they align and size identically
+  const flat = StyleSheet.flatten(style) || {};
+  const outerKeys = [
+    'position', 'top', 'bottom', 'left', 'right',
+    'margin', 'marginTop', 'marginBottom', 'marginLeft', 'marginRight', 'marginVertical', 'marginHorizontal',
+    'flex', 'flexGrow', 'flexShrink', 'flexBasis',
+    'alignSelf',
+    'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight',
+    'zIndex',
+  ];
+
+  const outerStyle: any = {};
+  const innerStyle: any = {};
+
+  Object.keys(flat).forEach((key) => {
+    const val = (flat as any)[key];
+    if (outerKeys.includes(key)) {
+      outerStyle[key] = val;
+      if (['flex', 'width', 'height', 'minWidth', 'maxWidth', 'minHeight', 'maxHeight'].includes(key)) {
+        innerStyle[key] = val;
+      }
+    } else {
+      innerStyle[key] = val;
+    }
+  });
+
+  if (outerStyle.flex || outerStyle.height) {
+    innerStyle.flex = 1;
+  }
+
   return (
-    <View style={[styles.outerContainer, style]}>
+    <View style={[styles.outerContainer, outerStyle]}>
       {/* Black Hard Shadow Layer */}
       <View
         style={[
@@ -42,6 +72,7 @@ export const BrutalistCard: React.FC<BrutalistCardProps> = ({
       <View
         style={[
           styles.contentLayer,
+          innerStyle,
           {
             backgroundColor: accentColor,
             borderRadius: borderRadius,

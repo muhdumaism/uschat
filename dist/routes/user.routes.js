@@ -99,6 +99,7 @@ async function userRoutes(fastify) {
                 OR: [
                     { username: { contains: queryClean } },
                     { displayName: { contains: queryClean } },
+                    { id: { equals: queryClean } },
                 ],
                 id: { not: request.user.id },
             },
