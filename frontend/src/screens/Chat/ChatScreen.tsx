@@ -29,6 +29,7 @@ import { ImagePreviewModal } from '../../components/ImagePreviewModal';
 import { AttachmentSheet } from '../../components/AttachmentSheet';
 import { EmojiPickerModal } from '../../components/EmojiPickerModal';
 import { COLORS } from '../../theme/colors';
+import { BRUTALIST_COLORS, BRUTALIST_STYLES } from '../../theme/brutalistTheme';
 import { useChatStore } from '../../store/chatStore';
 import { useAuthStore } from '../../store/authStore';
 import { apiClient } from '../../api/client';
@@ -874,12 +875,12 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
       >
         <TouchableOpacity
           activeOpacity={1}
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' }}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
           onPress={() => setSelectedMessage(null)}
         >
-          <View style={{ backgroundColor: '#121212', borderTopWidth: 3, borderTopColor: '#FFFFFF', padding: 20, paddingBottom: Platform.OS === 'ios' ? 40 : 20, borderRadius: 0 }}>
+          <View style={{ backgroundColor: '#FFFFFF', borderTopWidth: 4, borderTopColor: '#000000', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: Platform.OS === 'ios' ? 40 : 20 }}>
             {/* Quick Emoji Reactions */}
-            <Text style={{ color: '#A1A1AA', fontSize: 11, fontWeight: '900', marginBottom: 12, letterSpacing: 1.5 }}>REACTIONS</Text>
+            <Text style={{ color: '#000000', fontSize: 12, fontWeight: '900', marginBottom: 12, fontFamily: BRUTALIST_STYLES.fontBold }}>REACTIONS</Text>
             <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20 }}>
               {['👍', '❤️', '😂', '😮', '😢', '🙏'].map((emoji) => (
                 <TouchableOpacity
@@ -889,14 +890,14 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
                     setSelectedMessage(null);
                     await reactToMessage(msg.id, chatId, emoji);
                   }}
-                  style={{ width: 44, height: 44, borderRadius: 0, borderWidth: 2, borderColor: '#FFFFFF', backgroundColor: '#000000', justifyContent: 'center', alignItems: 'center' }}
+                  style={{ width: 44, height: 44, borderRadius: 8, borderWidth: 2, borderColor: '#000000', backgroundColor: BRUTALIST_COLORS.yellow, justifyContent: 'center', alignItems: 'center' }}
                 >
                   <Text style={{ fontSize: 22 }}>{emoji}</Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            <View style={{ height: 2, backgroundColor: '#FFFFFF', marginBottom: 16 }} />
+            <View style={{ height: 3, backgroundColor: '#000000', marginBottom: 16 }} />
 
             {/* Reply */}
             <TouchableOpacity
@@ -905,10 +906,10 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
                 setSelectedMessage(null);
                 setReplyingToMessage(msg);
               }}
-              style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14 }}
+              style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }}
             >
-              <Reply size={20} color="#FFFFFF" style={{ marginRight: 12 }} />
-              <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '900', letterSpacing: 1 }}>REPLY</Text>
+              <Reply size={20} color="#000000" style={{ marginRight: 12 }} />
+              <Text style={{ color: '#000000', fontSize: 14, fontWeight: '900', fontFamily: BRUTALIST_STYLES.fontBold }}>REPLY</Text>
             </TouchableOpacity>
 
             {/* Copy */}
@@ -920,14 +921,14 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
                   Clipboard.setString(msg.decryptedText || msg.encryptedContent);
                   Alert.alert('COPIED', 'MESSAGE COPIED TO CLIPBOARD.');
                 }}
-                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14 }}
+                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }}
               >
-                <Copy size={20} color="#FFFFFF" style={{ marginRight: 12 }} />
-                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '900', letterSpacing: 1 }}>COPY TEXT</Text>
+                <Copy size={20} color="#000000" style={{ marginRight: 12 }} />
+                <Text style={{ color: '#000000', fontSize: 14, fontWeight: '900', fontFamily: BRUTALIST_STYLES.fontBold }}>COPY TEXT</Text>
               </TouchableOpacity>
             )}
 
-            {/* Edit (Only if user's own message and not image/view-once) */}
+            {/* Edit */}
             {selectedMessage?.senderId === currentUser?.id && selectedMessage?.messageType !== 'IMAGE' && !selectedMessage?.viewOnce && (
               <TouchableOpacity
                 onPress={() => {
@@ -936,14 +937,14 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
                   setEditingMessageId(msg.id);
                   setInputText(msg.decryptedText || msg.encryptedContent);
                 }}
-                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14 }}
+                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }}
               >
-                <Edit size={20} color="#FFFFFF" style={{ marginRight: 12 }} />
-                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '900', letterSpacing: 1 }}>EDIT MESSAGE</Text>
+                <Edit size={20} color="#000000" style={{ marginRight: 12 }} />
+                <Text style={{ color: '#000000', fontSize: 14, fontWeight: '900', fontFamily: BRUTALIST_STYLES.fontBold }}>EDIT MESSAGE</Text>
               </TouchableOpacity>
             )}
 
-            {/* Delete (Only if user's own message) */}
+            {/* Delete */}
             {selectedMessage?.senderId === currentUser?.id && (
               <TouchableOpacity
                 onPress={() => {
@@ -962,14 +963,14 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
                     ]
                   );
                 }}
-                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14 }}
+                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }}
               >
-                <Trash2 size={20} color="#FF0000" style={{ marginRight: 12 }} />
-                <Text style={{ color: '#FF0000', fontSize: 15, fontWeight: '900', letterSpacing: 1 }}>DELETE FOR EVERYONE</Text>
+                <Trash2 size={20} color={BRUTALIST_COLORS.red} style={{ marginRight: 12 }} />
+                <Text style={{ color: BRUTALIST_COLORS.red, fontSize: 14, fontWeight: '900', fontFamily: BRUTALIST_STYLES.fontBold }}>DELETE FOR EVERYONE</Text>
               </TouchableOpacity>
             )}
 
-            {/* Pin Message (Only if Group Chat) */}
+            {/* Pin Message */}
             {isGroup && (
               <TouchableOpacity
                 onPress={async () => {
@@ -982,10 +983,10 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
                     Alert.alert('ERROR', 'FAILED TO TOGGLE PIN STATE.');
                   }
                 }}
-                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14 }}
+                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }}
               >
-                <Pin size={20} color="#FFFFFF" style={{ marginRight: 12 }} />
-                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '900', letterSpacing: 1 }}>
+                <Pin size={20} color="#000000" style={{ marginRight: 12 }} />
+                <Text style={{ color: '#000000', fontSize: 14, fontWeight: '900', fontFamily: BRUTALIST_STYLES.fontBold }}>
                   {selectedMessage?.isPinned ? 'UNPIN MESSAGE' : 'PIN MESSAGE'}
                 </Text>
               </TouchableOpacity>
@@ -1007,31 +1008,30 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: '#FFFFFF',
   },
   statusBarSpacer: {
-    height: Platform.OS === 'android' ? 52 : 28,
-    backgroundColor: '#121212',
-    borderBottomWidth: 2,
-    borderColor: '#FFFFFF',
+    height: Platform.OS === 'android' ? 44 : 20,
+    backgroundColor: '#FFFFFF',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    backgroundColor: '#121212',
-    borderBottomWidth: 3,
-    borderColor: '#FFFFFF',
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: BRUTALIST_STYLES.borderWidth,
+    borderColor: '#000000',
   },
   backBtn: {
-    width: 38,
-    height: 38,
+    width: 34,
+    height: 34,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
-    backgroundColor: '#000000',
+    borderColor: '#000000',
+    backgroundColor: BRUTALIST_COLORS.yellow,
     justifyContent: 'center',
     alignItems: 'center',
+    borderRadius: 8,
   },
   headerProfile: {
     flex: 1,
@@ -1043,121 +1043,124 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   headerName: {
-    color: '#FFFFFF',
-    fontSize: 15,
+    color: '#000000',
+    fontSize: 14,
     fontWeight: '900',
-    letterSpacing: 0.5,
+    fontFamily: BRUTALIST_STYLES.fontBold,
   },
   headerHandle: {
-    color: '#A1A1AA',
-    fontSize: 12,
-    fontWeight: '700',
+    color: '#555555',
+    fontSize: 10,
+    fontWeight: 'bold',
+    fontFamily: BRUTALIST_STYLES.fontBold,
   },
   headerActions: {
     flexDirection: 'row',
   },
   headerIcon: {
-    width: 36,
-    height: 36,
+    width: 34,
+    height: 34,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
-    backgroundColor: '#000000',
+    borderColor: '#000000',
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 6,
+    borderRadius: 8,
   },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#121212',
+    backgroundColor: BRUTALIST_COLORS.yellow,
     paddingVertical: 6,
     paddingHorizontal: 16,
     borderBottomWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: '#000000',
   },
   bannerText: {
-    color: '#FFFFFF',
-    fontSize: 10,
+    color: '#000000',
+    fontSize: 9,
     marginLeft: 6,
     fontWeight: '900',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    fontFamily: BRUTALIST_STYLES.fontBold,
   },
   listContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 32,
+    paddingBottom: 40,
   },
   inputBarContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: '#0F0F0F',
-    borderTopWidth: 1,
-    borderTopColor: '#1A1A1A',
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: BRUTALIST_STYLES.borderWidth,
+    borderTopColor: '#000000',
   },
   pillContainer: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1E1E1E',
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: '#2D2D2D',
-    paddingHorizontal: 16,
-    height: 46,
-    marginRight: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: BRUTALIST_STYLES.borderRadiusSmall,
+    borderWidth: BRUTALIST_STYLES.borderWidthThin,
+    borderColor: '#000000',
+    paddingHorizontal: 12,
+    height: 44,
+    marginRight: 8,
   },
   plusBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#000000',
+    backgroundColor: BRUTALIST_COLORS.pink,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
+    marginRight: 8,
   },
   textInput: {
     flex: 1,
-    color: '#FFF',
-    fontSize: 14,
+    color: '#000000',
+    fontSize: 13,
     height: '100%',
     paddingVertical: 0,
     margin: 0,
+    fontWeight: 'bold',
+    fontFamily: BRUTALIST_STYLES.fontBold,
   },
   smileBtn: {
-    padding: 6,
-    marginLeft: 6,
+    padding: 4,
+    marginLeft: 4,
   },
   actionBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: COLORS.primary,
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#000000',
+    backgroundColor: BRUTALIST_COLORS.yellow,
     justifyContent: 'center',
     alignItems: 'center',
   },
   micBtnActive: {
-    backgroundColor: '#E53935',
-    shadowColor: '#E53935',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 6,
-    elevation: 6,
+    backgroundColor: BRUTALIST_COLORS.red,
   },
   recordingDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#E53935',
+    backgroundColor: BRUTALIST_COLORS.red,
     marginRight: 8,
   },
   recordingText: {
-    color: '#E53935',
-    fontSize: 13,
+    color: BRUTALIST_COLORS.red,
+    fontSize: 12,
     fontWeight: 'bold',
+    fontFamily: BRUTALIST_STYLES.fontBold,
     flex: 1,
   },
   recordingCancelBtn: {
@@ -1165,31 +1168,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   recordingCancelText: {
-    color: COLORS.textMuted,
-    fontSize: 13,
-    fontWeight: '600',
+    color: '#555555',
+    fontSize: 12,
+    fontWeight: 'bold',
+    fontFamily: BRUTALIST_STYLES.fontBold,
   },
   uploadProgressBanner: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#1C1C1E',
+    backgroundColor: BRUTALIST_COLORS.blue,
+    borderTopWidth: 2,
+    borderColor: '#000000',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#2C2C2E',
+    paddingVertical: 10,
   },
   uploadProgressText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '600',
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '900',
+    fontFamily: BRUTALIST_STYLES.fontBold,
   },
   uploadCancelBtn: {
     paddingVertical: 4,
     paddingHorizontal: 8,
   },
   uploadCancelText: {
-    color: '#FF3B30',
-    fontWeight: 'bold',
+    color: '#FFFFFF',
+    fontWeight: '900',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    textDecorationLine: 'underline',
   },
 });

@@ -11,11 +11,11 @@ import {
   ScrollView,
   Image,
 } from 'react-native';
-import { Mail, Lock, User, ShieldCheck, Globe, Key } from 'lucide-react-native';
-import { GlassCard } from '../../components/GlassCard';
-import { GlassInput } from '../../components/GlassInput';
-import { Button } from '../../components/Button';
-import { COLORS } from '../../theme/colors';
+import { Mail, Lock, User, ShieldAlert } from 'lucide-react-native';
+import { BRUTALIST_COLORS, BRUTALIST_STYLES } from '../../theme/brutalistTheme';
+import { BrutalistCard } from '../../components/BrutalistCard';
+import { BrutalistButton } from '../../components/BrutalistButton';
+import { BrutalistTextInput } from '../../components/BrutalistTextInput';
 import { apiClient } from '../../api/client';
 import { useAuthStore } from '../../store/authStore';
 
@@ -34,12 +34,12 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
 
   const handleRegister = async () => {
     if (!email || !username || !password) {
-      setError('Please fill in all required fields.');
+      setError('PLEASE FILL IN ALL REQUIRED FIELDS.');
       return;
     }
 
     if (!validateEmail(email)) {
-      setError('Please enter a valid email address.');
+      setError('PLEASE ENTER A VALID EMAIL ADDRESS.');
       return;
     }
 
@@ -51,12 +51,12 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
         username: username.trim().toLowerCase(),
         displayName: displayName.trim() || username.trim(),
         password,
-        deviceName: `${Platform.OS.toUpperCase()} Mobile Device`,
+        deviceName: `${Platform.OS.toUpperCase()} MOBILE DEVICE`,
       });
 
       await setAuth(res.data.user, res.data.token, res.data.refreshToken);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Registration failed. Try a different username.');
+      setError(err.response?.data?.message?.toUpperCase() || 'REGISTRATION FAILED. TRY ANOTHER USERNAME.');
     } finally {
       setLoading(false);
     }
@@ -67,125 +67,139 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
 
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.statusBarSpacer} />
 
-        <View style={styles.mainCardWrapper}>
-          <GlassCard style={styles.card}>
-            {/* Real Transparent App Logo */}
-            <View style={styles.logoContainer}>
-              <Image
-                source={require('../../../assets/uschatlogo-trans.png')}
-                style={styles.logoImage}
-                resizeMode="contain"
+        <View style={styles.cardWrapper}>
+          <BrutalistCard
+            accentColor={BRUTALIST_COLORS.cardBg}
+            padding={24}
+            style={styles.card}
+          >
+            {/* Header branding */}
+            <View style={styles.logoRow}>
+              <View style={styles.logoBox}>
+                <Image
+                  source={require('../../../assets/uschatlogo-trans.png')}
+                  style={styles.logoImage}
+                  resizeMode="contain"
+                />
+              </View>
+              <View style={styles.brandInfo}>
+                <Text style={styles.brandTitle}>USCHAT SECURE</Text>
+                <Text style={styles.brandSub}>ESTABLISH CLIENT NODE</Text>
+              </View>
+            </View>
+
+            {/* Info box banner */}
+            <BrutalistCard
+              accentColor={BRUTALIST_COLORS.blue}
+              padding={10}
+              style={styles.banner}
+              borderRadius={BRUTALIST_STYLES.borderRadiusSmall}
+            >
+              <Text style={styles.bannerText}>
+                ENTER A VALID EMAIL AND UNIQUE ID TO SPIN UP AN E2EE MESSAGING IDENTITY.
+              </Text>
+            </BrutalistCard>
+
+            {/* Input form */}
+            <View style={styles.form}>
+              <Text style={styles.label}>EMAIL ADDRESS *</Text>
+              <BrutalistTextInput
+                placeholder="client@uschat.space"
+                value={email}
+                onChangeText={(val) => {
+                  setEmail(val);
+                  setError('');
+                }}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                icon={<Mail size={16} color="#000000" />}
+                containerStyle={{ marginBottom: 16 }}
+              />
+
+              <Text style={styles.label}>USERNAME HANDLE *</Text>
+              <BrutalistTextInput
+                placeholder="client_node"
+                value={username}
+                onChangeText={(val) => {
+                  setUsername(val);
+                  setError('');
+                }}
+                autoCapitalize="none"
+                icon={<User size={16} color="#000000" />}
+                containerStyle={{ marginBottom: 16 }}
+              />
+
+              <Text style={styles.label}>DISPLAY NAME (OPTIONAL)</Text>
+              <BrutalistTextInput
+                placeholder="CLIENT CORE"
+                value={displayName}
+                onChangeText={setDisplayName}
+                icon={<User size={16} color="#000000" />}
+                containerStyle={{ marginBottom: 16 }}
+              />
+
+              <Text style={styles.label}>SECURITY PASSWORD *</Text>
+              <BrutalistTextInput
+                placeholder="••••••••••••"
+                value={password}
+                onChangeText={(val) => {
+                  setPassword(val);
+                  setError('');
+                }}
+                secureTextEntry
+                icon={<Lock size={16} color="#000000" />}
+                containerStyle={{ marginBottom: 20 }}
+              />
+
+              {error ? (
+                <View style={styles.errorContainer}>
+                  <ShieldAlert size={16} color={BRUTALIST_COLORS.red} style={{ marginRight: 8 }} />
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
+              ) : null}
+            </View>
+
+            {/* Action buttons */}
+            <View style={styles.actionRow}>
+              <BrutalistButton
+                title={loading ? "CREATING..." : "OK"}
+                onPress={handleRegister}
+                disabled={loading}
+                style={styles.btn}
+                accentColor={BRUTALIST_COLORS.yellow}
+              />
+              <BrutalistButton
+                title="CLEAR"
+                onPress={() => {
+                  setEmail('');
+                  setUsername('');
+                  setDisplayName('');
+                  setPassword('');
+                  setError('');
+                }}
+                style={styles.btn}
+                accentColor={BRUTALIST_COLORS.blue}
+                textStyle={{ color: '#FFFFFF' }}
               />
             </View>
 
-            <Text style={styles.title}>Create your Account</Text>
-            <Text style={styles.subtitle}>
-              Join USCHAT for fast, secure messaging & calls.
-            </Text>
-
-            {/* Input Fields */}
-            <View style={styles.inputContainer}>
-              <View style={styles.inputGap}>
-                <GlassInput
-                  placeholder="Email"
-                  value={email}
-                  onChangeText={(val) => {
-                    setEmail(val);
-                    setError('');
-                  }}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  icon={<Mail size={18} color={COLORS.textMuted} />}
-                />
-              </View>
-
-              <View style={styles.inputGap}>
-                <GlassInput
-                  placeholder="Username (@username)"
-                  value={username}
-                  onChangeText={(val) => {
-                    setUsername(val);
-                    setError('');
-                  }}
-                  autoCapitalize="none"
-                  icon={<User size={18} color={COLORS.textMuted} />}
-                />
-              </View>
-
-              <View style={styles.inputGap}>
-                <GlassInput
-                  placeholder="Display Name (Optional)"
-                  value={displayName}
-                  onChangeText={setDisplayName}
-                  icon={<User size={18} color={COLORS.textMuted} />}
-                />
-              </View>
-
-              <View style={styles.inputGap}>
-                <GlassInput
-                  placeholder="Password"
-                  value={password}
-                  onChangeText={(val) => {
-                    setPassword(val);
-                    setError('');
-                  }}
-                  secureTextEntry
-                  icon={<Lock size={18} color={COLORS.textMuted} />}
-                />
-              </View>
-
-              {error ? <Text style={styles.errorText}>{error}</Text> : null}
-            </View>
-
-            {/* Submit Button */}
-            <Button
-              title="Get Started"
-              onPress={handleRegister}
-              loading={loading}
-              style={styles.submitBtn}
-            />
-
-            {/* Dashed Divider */}
-            <View style={styles.dividerRow}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>Protected by USCHAT Security</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            {/* Security Highlights */}
-            <View style={styles.socialRow}>
+            {/* Switch to login */}
+            <View style={styles.footer}>
               <TouchableOpacity
-                onPress={() => Alert.alert('Security Check', 'Session Security Active')}
-                style={styles.socialBtn}
+                onPress={() => navigation.navigate('Login')}
+                style={styles.footerLink}
               >
-                <ShieldCheck size={22} color={COLORS.primary} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => Alert.alert('Connection Status', 'All servers secure and verified')}
-                style={styles.socialBtn}
-              >
-                <Globe size={22} color={COLORS.accent} />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => Alert.alert('Privacy Protection', 'Your keys and session stay on your device.')}
-                style={styles.socialBtn}
-              >
-                <Key size={22} color={COLORS.success} />
+                <Text style={styles.footerText}>
+                  ALREADY AN IDENTITY NODE? <Text style={styles.highlight}>SIGN IN</Text>
+                </Text>
               </TouchableOpacity>
             </View>
-
-            {/* Already Have Account Footer Link */}
-            <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.footerLink}>
-              <Text style={styles.footerText}>
-                Already have an account? <Text style={styles.highlightText}>Sign in</Text>
-              </Text>
-            </TouchableOpacity>
-          </GlassCard>
+          </BrutalistCard>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -195,122 +209,124 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: BRUTALIST_COLORS.background,
   },
   statusBarSpacer: {
-    height: Platform.OS === 'android' ? 48 : 24,
+    height: Platform.OS === 'android' ? 44 : 20,
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 24,
+    paddingVertical: 20,
   },
-  mainCardWrapper: {
+  cardWrapper: {
     alignItems: 'center',
-    width: '100%',
+    justifyContent: 'center',
   },
   card: {
     width: '100%',
-    maxWidth: 400,
-    paddingHorizontal: 24,
-    paddingVertical: 32,
-    alignItems: 'center',
+    maxWidth: 360,
   },
-  logoContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 28,
-    backgroundColor: 'rgba(59, 130, 246, 0.12)',
-    borderColor: COLORS.cardBorder,
-    borderWidth: 1.5,
+  logoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    marginBottom: 20,
+  },
+  logoBox: {
+    width: 48,
+    height: 48,
+    backgroundColor: '#FFFFFF',
+    borderWidth: BRUTALIST_STYLES.borderWidthThin,
+    borderColor: BRUTALIST_COLORS.border,
+    borderRadius: BRUTALIST_STYLES.borderRadiusSmall,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
-    padding: 8,
+    padding: 6,
   },
   logoImage: {
     width: '100%',
     height: '100%',
   },
-  title: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#FFF',
-    marginBottom: 8,
-    textAlign: 'center',
-    letterSpacing: 0.5,
+  brandInfo: {
+    marginLeft: 12,
   },
-  subtitle: {
-    fontSize: 13,
-    color: COLORS.textMuted,
-    textAlign: 'center',
+  brandTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#000000',
+  },
+  brandSub: {
+    fontSize: 10,
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#555555',
+    marginTop: 2,
+  },
+  banner: {
     marginBottom: 24,
-    lineHeight: 18,
-    paddingHorizontal: 8,
   },
-  inputContainer: {
-    width: '100%',
+  bannerText: {
+    fontSize: 11,
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#FFFFFF',
+    lineHeight: 16,
+    textAlign: 'center',
+    fontWeight: 'bold',
+  },
+  form: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 11,
+    fontWeight: '900',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#000000',
     marginBottom: 8,
   },
-  inputGap: {
-    marginBottom: 14,
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFEEEE',
+    borderColor: BRUTALIST_COLORS.red,
+    borderWidth: BRUTALIST_STYLES.borderWidthThin,
+    borderRadius: BRUTALIST_STYLES.borderRadiusSmall,
+    padding: 10,
+    marginBottom: 10,
   },
   errorText: {
-    color: COLORS.danger,
-    fontSize: 12,
-    marginBottom: 12,
-    textAlign: 'left',
-  },
-  submitBtn: {
-    width: '100%',
-    marginTop: 4,
-    marginBottom: 20,
-  },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    marginBottom: 20,
-  },
-  dividerLine: {
+    color: BRUTALIST_COLORS.red,
+    fontSize: 10,
+    fontWeight: 'bold',
+    fontFamily: BRUTALIST_STYLES.fontBold,
     flex: 1,
-    height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
-  dividerText: {
-    color: COLORS.textMuted,
-    fontSize: 12,
-    marginHorizontal: 12,
-  },
-  socialRow: {
+  actionRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    width: '100%',
+    justifyContent: 'flex-end',
+    gap: 12,
     marginBottom: 24,
   },
-  socialBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: COLORS.secondaryBackground,
-    borderColor: COLORS.border,
-    borderWidth: 1,
-    justifyContent: 'center',
+  btn: {
+    width: 100,
+  },
+  footer: {
+    borderTopWidth: BRUTALIST_STYLES.borderWidthThin,
+    borderColor: BRUTALIST_COLORS.border,
+    paddingTop: 20,
     alignItems: 'center',
-    marginHorizontal: 8,
   },
   footerLink: {
-    marginTop: 4,
-    alignItems: 'center',
+    paddingVertical: 4,
   },
   footerText: {
-    color: COLORS.textSecondary,
-    fontSize: 14,
+    fontSize: 11,
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#333333',
   },
-  highlightText: {
-    color: COLORS.primary,
-    fontWeight: '700',
+  highlight: {
+    color: BRUTALIST_COLORS.blue,
+    fontWeight: '900',
   },
 });
-

@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, Platform, StatusBar } from 'react-native';
 import { ArrowLeft, Search, UserPlus, Users, CheckSquare, Square } from 'lucide-react-native';
-import { RetroWindow } from '../../components/RetroWindow';
-import { RetroButton } from '../../components/RetroButton';
-import { RetroTextInput } from '../../components/RetroTextInput';
-import { RetroPanel } from '../../components/RetroPanel';
+import { BRUTALIST_COLORS, BRUTALIST_STYLES } from '../../theme/brutalistTheme';
+import { BrutalistCard } from '../../components/BrutalistCard';
+import { BrutalistButton } from '../../components/BrutalistButton';
+import { BrutalistTextInput } from '../../components/BrutalistTextInput';
 import { Avatar } from '../../components/Avatar';
-import { RETRO_COLORS } from '../../theme/retroTheme';
-import { COLORS } from '../../theme/colors';
 import { apiClient } from '../../api/client';
 import { useChatStore } from '../../store/chatStore';
 
@@ -90,119 +88,142 @@ export const CreateChatScreen: React.FC<any> = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
       <View style={styles.statusBarSpacer} />
       
-      <RetroWindow
-        title="CREATE_ROUTE.EXE"
-        onClose={() => navigation.goBack()}
-        contentStyle={styles.windowContent}
-      >
-        {/* Navigation Tabs */}
-        <View style={styles.tabBar}>
-          <TouchableOpacity
-            onPress={() => { setActiveTab('direct'); setResults([]); setQuery(''); }}
-            style={[styles.tab, activeTab === 'direct' && styles.activeTab]}
-          >
-            <UserPlus size={14} color="#000" style={{ marginRight: 6 }} />
-            <Text style={styles.tabText}>DIRECT E2EE</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => { setActiveTab('group'); setResults([]); setQuery(''); }}
-            style={[styles.tab, activeTab === 'group' && styles.activeTab]}
-          >
-            <Users size={14} color="#000" style={{ marginRight: 6 }} />
-            <Text style={styles.tabText}>GROUP CHAT</Text>
-          </TouchableOpacity>
-        </View>
+      {/* Header Bar */}
+      <View style={styles.header}>
+        <BrutalistButton onPress={() => navigation.goBack()} style={styles.backBtn} accentColor={BRUTALIST_COLORS.yellow}>
+          <ArrowLeft size={18} color="#000000" />
+        </BrutalistButton>
+        <Text style={styles.headerTitle}>NEW ROUTE</Text>
+        <View style={{ width: 36 }} />
+      </View>
 
-        {/* Tab content panel */}
-        <RetroPanel style={styles.panelContent} raised={false}>
-          {activeTab === 'group' && (
-            <View style={styles.groupMetaBox}>
-              <Text style={styles.label}>SECURED GROUP NAME</Text>
-              <RetroTextInput
-                placeholder="ENTER SECURED ROUTE TITLE..."
-                value={groupName}
-                onChangeText={setGroupName}
-                containerStyle={{ marginBottom: 12 }}
-              />
-              <Text style={styles.selectedCountText}>
-                MEMBERS SELECTED: {selectedUsernames.length}
-              </Text>
-            </View>
-          )}
+      {/* Tab Buttons */}
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          onPress={() => { setActiveTab('direct'); setResults([]); setQuery(''); }}
+          style={[
+            styles.tab,
+            {
+              backgroundColor: activeTab === 'direct' ? BRUTALIST_COLORS.yellow : '#FFFFFF',
+              borderRightWidth: BRUTALIST_STYLES.borderWidthThin,
+            }
+          ]}
+        >
+          <UserPlus size={16} color="#000000" style={{ marginRight: 6 }} />
+          <Text style={styles.tabText}>DIRECT E2EE</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          onPress={() => { setActiveTab('group'); setResults([]); setQuery(''); }}
+          style={[
+            styles.tab,
+            {
+              backgroundColor: activeTab === 'group' ? BRUTALIST_COLORS.yellow : '#FFFFFF',
+            }
+          ]}
+        >
+          <Users size={16} color="#000000" style={{ marginRight: 6 }} />
+          <Text style={styles.tabText}>GROUP CHAT</Text>
+        </TouchableOpacity>
+      </View>
 
-          {/* Search Box */}
-          <View style={styles.searchRow}>
-            <RetroTextInput
-              placeholder="SEARCH BY HANDLE OR @USERNAME..."
-              value={query}
-              onChangeText={handleSearch}
-              icon={<Search size={16} color="#808080" />}
-              containerStyle={{ flex: 1 }}
-            />
+      {/* Group Info Input Field */}
+      {activeTab === 'group' && (
+        <BrutalistCard accentColor={BRUTALIST_COLORS.cardBg} padding={12} style={styles.groupMetaBox}>
+          <Text style={styles.label}>SECURED GROUP NAME</Text>
+          <BrutalistTextInput
+            placeholder="ENTER SECURED ROUTE TITLE..."
+            value={groupName}
+            onChangeText={setGroupName}
+            containerStyle={{ marginBottom: 10 }}
+          />
+          <Text style={styles.selectedCountText}>
+            MEMBERS SELECTED: {selectedUsernames.length}
+          </Text>
+        </BrutalistCard>
+      )}
+
+      {/* Search Input Bar */}
+      <View style={styles.searchRow}>
+        <BrutalistTextInput
+          placeholder="SEARCH BY HANDLE OR @USERNAME..."
+          value={query}
+          onChangeText={handleSearch}
+          icon={<Search size={18} color="#000000" />}
+          containerStyle={{ flex: 1 }}
+        />
+      </View>
+
+      {/* Results Box */}
+      <BrutalistCard accentColor="#FFFFFF" padding={12} style={{ flex: 1 }}>
+        {searching ? (
+          <View style={styles.center}>
+            <ActivityIndicator color="#000000" size="large" />
           </View>
-
-          {searching ? (
-            <View style={styles.center}>
-              <ActivityIndicator color={COLORS.primary} size="large" />
-            </View>
-          ) : (
-            <FlatList
-              data={results}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={styles.listContainer}
-              renderItem={({ item }) => {
-                const isSelected = selectedUsernames.includes(item.username);
-                return (
-                  <TouchableOpacity
-                    activeOpacity={0.8}
-                    onPress={() => {
-                      if (activeTab === 'direct') {
-                        startChat(item.username);
-                      } else {
-                        toggleSelectMember(item.username);
-                      }
-                    }}
-                    style={styles.userCard}
-                  >
-                    <Avatar name={item.displayName} uri={item.avatarUrl} size={36} />
-                    <View style={styles.userInfo}>
-                      <Text style={styles.displayName}>{item.displayName.toUpperCase()}</Text>
-                      <Text style={styles.username}>@{item.username.toLowerCase()}</Text>
+        ) : (
+          <FlatList
+            data={results}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContainer}
+            renderItem={({ item }) => {
+              const isSelected = selectedUsernames.includes(item.username);
+              return (
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={() => {
+                    if (activeTab === 'direct') {
+                      startChat(item.username);
+                    } else {
+                      toggleSelectMember(item.username);
+                    }
+                  }}
+                  style={styles.userCard}
+                >
+                  <Avatar name={item.displayName} uri={item.avatarUrl} size={36} />
+                  <View style={styles.userInfo}>
+                    <Text style={styles.displayName}>{item.displayName.toUpperCase()}</Text>
+                    <Text style={styles.username}>@{item.username.toLowerCase()}</Text>
+                  </View>
+                  
+                  {activeTab === 'group' && (
+                    <View style={styles.checkbox}>
+                      {isSelected ? (
+                        <CheckSquare size={22} color="#000000" />
+                      ) : (
+                        <Square size={22} color="#555555" />
+                      )}
                     </View>
-                    
-                    {activeTab === 'group' && (
-                      <View style={styles.checkbox}>
-                        {isSelected ? (
-                          <CheckSquare size={20} color="#000080" />
-                        ) : (
-                          <Square size={20} color="#808080" />
-                        )}
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              }}
-              ListEmptyComponent={
-                <View style={styles.center}>
-                  <Text style={styles.emptyText}>DIAL 2+ ALPHABETS TO ROUTE PEERS</Text>
-                </View>
-              }
+                  )}
+                </TouchableOpacity>
+              );
+            }}
+            ListEmptyComponent={
+              <View style={styles.center}>
+                <Text style={styles.emptyText}>DIAL 2+ ALPHABETS TO ROUTE PEERS</Text>
+              </View>
+            }
+          />
+        )}
+      </BrutalistCard>
+
+      {/* Create Button Footer */}
+      {activeTab === 'group' && (
+        <View style={styles.createBtnWrapper}>
+          {creating ? (
+            <ActivityIndicator color="#000000" size="small" />
+          ) : (
+            <BrutalistButton
+              title="ESTABLISH GROUP ROUTE"
+              onPress={handleCreateGroup}
+              style={{ width: '100%' }}
+              accentColor={BRUTALIST_COLORS.pink}
             />
           )}
-        </RetroPanel>
-
-        {activeTab === 'group' && (
-          <View style={styles.createBtnWrapper}>
-            {creating ? (
-              <ActivityIndicator color={COLORS.primary} size="small" />
-            ) : (
-              <RetroButton title="ESTABLISH GROUP ROUTE" onPress={handleCreateGroup} style={{ width: '100%' }} />
-            )}
-          </View>
-        )}
-      </RetroWindow>
+        </View>
+      )}
     </View>
   );
 };
@@ -210,90 +231,84 @@ export const CreateChatScreen: React.FC<any> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: RETRO_COLORS.desktop,
-    padding: 8,
+    backgroundColor: BRUTALIST_COLORS.background,
+    paddingHorizontal: 16,
+    paddingBottom: 24,
   },
   statusBarSpacer: {
-    height: Platform.OS === 'android' ? 34 : 20,
+    height: Platform.OS === 'android' ? 44 : 20,
   },
-  windowContent: {
-    flex: 1,
-    padding: 8,
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginBottom: 10,
+  },
+  backBtn: {
+    width: 34,
+    height: 34,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#000000',
   },
   tabBar: {
     flexDirection: 'row',
-    marginBottom: 2,
-    zIndex: 10,
+    marginBottom: 12,
+    borderWidth: BRUTALIST_STYLES.borderWidth,
+    borderColor: '#000000',
+    borderRadius: BRUTALIST_STYLES.borderRadiusSmall,
+    overflow: 'hidden',
   },
   tab: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
-    backgroundColor: RETRO_COLORS.windowBackground,
-    borderWidth: 2,
-    borderTopColor: RETRO_COLORS.panelLight,
-    borderLeftColor: RETRO_COLORS.panelLight,
-    borderRightColor: RETRO_COLORS.panelDark,
-    borderBottomColor: RETRO_COLORS.panelDark,
-  },
-  activeTab: {
-    backgroundColor: '#fff',
-    borderBottomWidth: 0,
-    borderTopColor: RETRO_COLORS.panelLight,
-    borderLeftColor: RETRO_COLORS.panelLight,
-    borderRightColor: RETRO_COLORS.panelDark,
+    paddingVertical: 10,
   },
   tabText: {
     fontSize: 11,
     fontWeight: 'bold',
-    fontFamily: 'monospace',
+    fontFamily: BRUTALIST_STYLES.fontBold,
     color: '#000000',
   },
-  panelContent: {
-    flex: 1,
-    padding: 8,
-    borderWidth: 2,
-    borderTopColor: RETRO_COLORS.panelDark,
-    borderLeftColor: RETRO_COLORS.panelDark,
-    borderRightColor: RETRO_COLORS.panelLight,
-    borderBottomColor: RETRO_COLORS.panelLight,
-    backgroundColor: '#fff',
-    marginBottom: 6,
-  },
   groupMetaBox: {
-    marginBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#d4d0c8',
-    paddingBottom: 8,
+    marginBottom: 12,
   },
   label: {
     fontSize: 10,
-    fontWeight: 'bold',
-    fontFamily: 'monospace',
-    color: '#000',
+    fontWeight: '900',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#000000',
     marginBottom: 4,
   },
   selectedCountText: {
     fontSize: 11,
-    fontFamily: 'monospace',
+    fontFamily: BRUTALIST_STYLES.fontBold,
     fontWeight: 'bold',
-    color: '#000080',
+    color: BRUTALIST_COLORS.pink,
   },
   searchRow: {
     flexDirection: 'row',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   listContainer: {
-    paddingBottom: 20,
+    paddingBottom: 10,
   },
   userCard: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#EEEEEE',
   },
   userInfo: {
     flex: 1,
@@ -302,13 +317,13 @@ const styles = StyleSheet.create({
   displayName: {
     fontSize: 13,
     fontWeight: 'bold',
-    fontFamily: 'monospace',
-    color: '#000',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#000000',
   },
   username: {
-    fontSize: 11,
-    fontFamily: 'monospace',
-    color: '#808080',
+    fontSize: 10,
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#555555',
     marginTop: 2,
   },
   checkbox: {
@@ -321,13 +336,13 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
   },
   emptyText: {
-    color: '#808080',
+    color: '#666666',
     fontSize: 11,
-    fontFamily: 'monospace',
+    fontFamily: BRUTALIST_STYLES.fontBold,
     fontWeight: 'bold',
   },
   createBtnWrapper: {
-    marginTop: 8,
+    marginTop: 12,
     alignItems: 'center',
   },
 });

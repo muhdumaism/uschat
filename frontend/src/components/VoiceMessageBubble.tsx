@@ -10,7 +10,7 @@ import {
 import { Play, Pause } from 'lucide-react-native';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
-import { COLORS } from '../theme/colors';
+import { BRUTALIST_COLORS, BRUTALIST_STYLES } from '../theme/brutalistTheme';
 
 // Static references to enforce single-audio playback globally (like WhatsApp/Telegram)
 let activeSoundInstance: Audio.Sound | null = null;
@@ -42,8 +42,8 @@ export const VoiceMessageBubble: React.FC<VoiceMessageBubbleProps> = ({
 
   const soundRef = useRef<Audio.Sound | null>(null);
 
-  // Resample waveform array to standard width of 35 bars
-  const targetBars = 32;
+  // Resample waveform array to standard width of 26 bars for space
+  const targetBars = 24;
   const resampledWaveform = React.useMemo(() => {
     if (!waveform || waveform.length === 0) {
       return Array(targetBars).fill(0.15);
@@ -53,19 +53,16 @@ export const VoiceMessageBubble: React.FC<VoiceMessageBubbleProps> = ({
     for (let i = 0; i < targetBars; i++) {
       const index = Math.floor(i * step);
       const val = waveform[index] !== undefined ? waveform[index] : 0.15;
-      // Guarantee a minimum height for visibility
       result.push(Math.max(0.1, val));
     }
     return result;
   }, [waveform]);
 
-  // Download & Cache audio file on mount for offline usage
   useEffect(() => {
     let isMounted = true;
     const cacheAudio = async () => {
       try {
         const filename = audioUrl.substring(audioUrl.lastIndexOf('/') + 1) || `voice_${Date.now()}.m4a`;
-        // Ensure folder exists and construct cache path
         const cachePath = `${FileSystem.cacheDirectory}${filename}`;
         const fileInfo = await FileSystem.getInfoAsync(cachePath);
 
@@ -77,7 +74,6 @@ export const VoiceMessageBubble: React.FC<VoiceMessageBubbleProps> = ({
         }
       } catch (err) {
         console.warn('Voice message caching error:', err);
-        // Fallback to original URL
         if (isMounted) setLocalUri(audioUrl);
       }
     };
@@ -143,7 +139,6 @@ export const VoiceMessageBubble: React.FC<VoiceMessageBubbleProps> = ({
     if (!localUri) return;
 
     try {
-      // 1. If currently playing, pause
       if (isPlaying) {
         await soundRef.current?.pauseAsync();
         setIsPlaying(false);
@@ -152,7 +147,6 @@ export const VoiceMessageBubble: React.FC<VoiceMessageBubbleProps> = ({
 
       setIsLoading(true);
 
-      // Pause other playing sounds
       if (activeSoundInstance && activePauseCallback) {
         try {
           await activeSoundInstance.pauseAsync();
@@ -160,19 +154,16 @@ export const VoiceMessageBubble: React.FC<VoiceMessageBubbleProps> = ({
         } catch (e) {}
       }
 
-      // 2. Initialize sound if not loaded yet
       let sound = soundRef.current;
       if (!sound) {
         sound = await loadSound(localUri);
       }
 
-      // Set global active audio references
       activeSoundInstance = sound;
       activePauseCallback = () => {
         setIsPlaying(false);
       };
 
-      // 3. Play from current position
       await sound.setRateAsync(playbackSpeed, true);
       await sound.playAsync();
       setIsPlaying(true);
@@ -196,11 +187,10 @@ export const VoiceMessageBubble: React.FC<VoiceMessageBubbleProps> = ({
     }
   };
 
-  // Seek audio position by tapping on the waveform
   const handleSeek = (e: any) => {
     if (!soundRef.current || isLoading) return;
     const touchX = e.nativeEvent.locationX;
-    const containerWidth = 160; // Approximated waveform layout width
+    const containerWidth = 140; // Waveform layout width
     const progress = touchX / containerWidth;
     const clampedProgress = Math.max(0, Math.min(1, progress));
     const targetPosition = clampedProgress * durationMillis;
@@ -221,18 +211,23 @@ export const VoiceMessageBubble: React.FC<VoiceMessageBubbleProps> = ({
   return (
     <View style={styles.bubbleContainer}>
       <View style={styles.mainRow}>
-        {/* Play/Pause Button */}
+        {/* Play/Pause Square Button */}
         <TouchableOpacity
           onPress={handlePlayPause}
-          style={[styles.playBtn, isSender ? styles.senderPlayBtn : styles.receiverPlayBtn]}
+          style={[
+            styles.playBtn,
+            {
+              backgroundColor: isSender ? '#FFFFFF' : BRUTALIST_COLORS.blue,
+            }
+          ]}
           disabled={!localUri || isLoading}
         >
           {isLoading ? (
-            <ActivityIndicator size="small" color="#FFF" />
+            <ActivityIndicator size="small" color="#000000" />
           ) : isPlaying ? (
-            <Pause size={20} color="#FFF" fill="#FFF" />
+            <Pause size={14} color="#000000" fill="#000000" />
           ) : (
-            <Play size={20} color="#FFF" fill="#FFF" style={{ marginLeft: 2 }} />
+            <Play size={14} color="#000000" fill="#000000" style={{ marginLeft: 2 }} />
           )}
         </TouchableOpacity>
 
@@ -246,7 +241,7 @@ export const VoiceMessageBubble: React.FC<VoiceMessageBubbleProps> = ({
             {resampledWaveform.map((barVal, index) => {
               const barProgress = index / targetBars;
               const isPlayed = barProgress <= currentPlayPercentage;
-              const barHeight = Math.max(4, Math.min(28, barVal * 28));
+              const barHeight = Math.max(4, Math.min(26, barVal * 26));
 
               return (
                 <View
@@ -255,9 +250,7 @@ export const VoiceMessageBubble: React.FC<VoiceMessageBubbleProps> = ({
                     styles.waveformBar,
                     {
                       height: barHeight,
-                      backgroundColor: isPlayed
-                        ? (isSender ? '#FFF' : COLORS.primary)
-                        : (isSender ? 'rgba(255, 255, 255, 0.35)' : '#444'),
+                      backgroundColor: isPlayed ? '#000000' : '#888888',
                     },
                   ]}
                 />
@@ -266,16 +259,16 @@ export const VoiceMessageBubble: React.FC<VoiceMessageBubbleProps> = ({
           </TouchableOpacity>
 
           <View style={styles.timeRow}>
-            <Text style={[styles.timeLabel, isSender ? styles.senderText : styles.receiverText]}>
+            <Text style={styles.timeLabel}>
               {formatTime(positionMillis)} / {formatTime(durationMillis)}
             </Text>
           </View>
         </View>
 
-        {/* Playback Speed Cycler Badge */}
+        {/* Speed Badge */}
         <TouchableOpacity
           onPress={handleCycleSpeed}
-          style={[styles.speedBadge, isSender ? styles.senderSpeedBadge : styles.receiverSpeedBadge]}
+          style={styles.speedBadge}
         >
           <Text style={styles.speedText}>{playbackSpeed}x</Text>
         </TouchableOpacity>
@@ -286,32 +279,23 @@ export const VoiceMessageBubble: React.FC<VoiceMessageBubbleProps> = ({
 
 const styles = StyleSheet.create({
   bubbleContainer: {
-    paddingVertical: 4,
+    paddingVertical: 2,
     paddingHorizontal: 2,
-    minWidth: 230,
+    minWidth: 220,
   },
   mainRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   playBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 32,
+    height: 32,
+    borderRadius: BRUTALIST_STYLES.borderRadiusSmall,
+    borderWidth: 2,
+    borderColor: '#000000',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  senderPlayBtn: {
-    backgroundColor: COLORS.primary,
-  },
-  receiverPlayBtn: {
-    backgroundColor: '#333',
   },
   waveformColumn: {
     flex: 1,
@@ -321,12 +305,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    width: 160,
-    height: 32,
+    width: 130,
+    height: 28,
   },
   waveformBar: {
     width: 3,
-    borderRadius: 1.5,
+    borderWidth: 0.5,
+    borderColor: '#000000',
   },
   timeRow: {
     flexDirection: 'row',
@@ -334,30 +319,24 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   timeLabel: {
-    fontSize: 10,
-    fontWeight: '500',
-  },
-  senderText: {
-    color: 'rgba(255, 255, 255, 0.75)',
-  },
-  receiverText: {
-    color: COLORS.textMuted,
+    fontSize: 9,
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    fontWeight: 'bold',
+    color: '#333333',
   },
   speedBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginLeft: 10,
-  },
-  senderSpeedBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-  },
-  receiverSpeedBadge: {
-    backgroundColor: '#2A2A2A',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: BRUTALIST_STYLES.borderRadiusSmall,
+    borderWidth: 2,
+    borderColor: '#000000',
+    backgroundColor: '#FFFFFF',
+    marginLeft: 8,
   },
   speedText: {
-    color: '#FFF',
-    fontSize: 11,
+    color: '#000000',
+    fontSize: 9,
+    fontFamily: BRUTALIST_STYLES.fontBold,
     fontWeight: 'bold',
   },
 });

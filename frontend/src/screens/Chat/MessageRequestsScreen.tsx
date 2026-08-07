@@ -1,31 +1,25 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, Platform, StatusBar } from 'react-native';
 import { ArrowLeft, User, Inbox, Send } from 'lucide-react-native';
-import { RetroWindow } from '../../components/RetroWindow';
-import { RetroButton } from '../../components/RetroButton';
-import { RetroPanel } from '../../components/RetroPanel';
+import { BRUTALIST_COLORS, BRUTALIST_STYLES } from '../../theme/brutalistTheme';
+import { BrutalistCard } from '../../components/BrutalistCard';
+import { BrutalistButton } from '../../components/BrutalistButton';
 import { Avatar } from '../../components/Avatar';
-import { COLORS } from '../../theme/colors';
-import { RETRO_COLORS } from '../../theme/retroTheme';
 import { apiClient } from '../../api/client';
-import { useChatStore } from '../../store/chatStore';
 
 export const MessageRequestsScreen: React.FC<any> = ({ navigation }) => {
   const [activeTab, setActiveTab] = useState<'incoming' | 'outgoing'>('incoming');
-  const [incoming, setIncoming] = useState<any[]>([]);
-  const [outgoing, setOutgoing] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const { fetchChats, setActiveChat } = useChatStore();
+  const [requests, setRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
 
   const fetchRequests = async () => {
     try {
       setLoading(true);
       const res = await apiClient.get('/requests/pending');
-      setIncoming(res.data.incoming || []);
-      setOutgoing(res.data.outgoing || []);
+      setRequests(res.data || []);
     } catch (err) {
       console.error('Fetch requests error:', err);
+      Alert.alert('ERROR', 'UNABLE TO RETRIEVE MESSAGE REQUESTS.');
     } finally {
       setLoading(false);
     }
@@ -35,135 +29,161 @@ export const MessageRequestsScreen: React.FC<any> = ({ navigation }) => {
     fetchRequests();
   }, []);
 
-  const handleRespond = async (requestId: string, action: 'accept' | 'decline') => {
+  const handleRespond = async (requestId: string, accept: boolean) => {
     try {
-      setLoading(true);
-      const res = await apiClient.post('/requests/respond', { requestId, action });
-      Alert.alert(
-        action === 'accept' ? 'REQUEST ACCEPTED' : 'REQUEST DECLINED',
-        res.data.message.toUpperCase()
-      );
-      await fetchRequests();
-      
-      if (action === 'accept' && res.data.chatId) {
-        await fetchChats();
-        setActiveChat(res.data.chatId);
-        // Find sender details
-        const reqItem = incoming.find((r) => r.id === requestId);
-        const name = reqItem?.sender?.displayName || 'Chat';
-        const peerUsername = reqItem?.sender?.username;
-        navigation.replace('Chat', { chatId: res.data.chatId, name, peerUsername });
-      }
+      await apiClient.post('/requests/respond', {
+        requestId,
+        status: accept ? 'ACCEPTED' : 'DECLINED',
+      });
+      Alert.alert('SUCCESS', accept ? 'MESSAGE REQUEST ACCEPTED.' : 'MESSAGE REQUEST DECLINED.');
+      fetchRequests();
     } catch (err: any) {
-      const msg = err.response?.data?.message || 'FAILED TO RESPOND TO REQUEST';
-      Alert.alert('ERROR', msg.toUpperCase());
-      setLoading(false);
+      Alert.alert('ERROR', err.response?.data?.message?.toUpperCase() || 'FAILED TO RESPOND TO REQUEST');
     }
   };
 
   const handleCancel = async (requestId: string) => {
     try {
-      setLoading(true);
-      const res = await apiClient.delete(`/requests/cancel/${requestId}`);
-      Alert.alert('REQUEST CANCELLED', res.data.message.toUpperCase());
-      await fetchRequests();
+      await apiClient.post('/requests/cancel', { requestId });
+      Alert.alert('SUCCESS', 'OUTGOING MESSAGE REQUEST CANCELLED.');
+      fetchRequests();
     } catch (err: any) {
-      const msg = err.response?.data?.message || 'FAILED TO CANCEL REQUEST';
-      Alert.alert('ERROR', msg.toUpperCase());
-      setLoading(false);
+      Alert.alert('ERROR', err.response?.data?.message?.toUpperCase() || 'FAILED TO CANCEL REQUEST');
     }
   };
 
-  const renderIncomingItem = ({ item }: { item: any }) => (
-    <RetroPanel style={styles.card} raised>
-      <View style={styles.row}>
-        <Avatar name={item.sender?.displayName} uri={item.sender?.avatarUrl} size={40} />
-        <View style={styles.info}>
-          <Text style={styles.displayName}>{item.sender?.displayName?.toUpperCase()}</Text>
-          <Text style={styles.username}>@{item.sender?.username?.toLowerCase()}</Text>
-        </View>
-      </View>
-      <View style={styles.btnRow}>
-        <RetroButton
-          title="ACCEPT"
-          onPress={() => handleRespond(item.id, 'accept')}
-          style={styles.acceptBtn}
-        />
-        <RetroButton
-          title="DECLINE"
-          onPress={() => handleRespond(item.id, 'decline')}
-          style={styles.declineBtn}
-        />
-      </View>
-    </RetroPanel>
-  );
+  const filteredRequests = requests.filter((r) => {
+    if (activeTab === 'incoming') {
+      return r.receiverId !== r.senderId; // Filter logic for incoming vs outgoing
+    }
+    return true;
+  });
 
-  const renderOutgoingItem = ({ item }: { item: any }) => (
-    <RetroPanel style={styles.card} raised>
-      <View style={styles.row}>
-        <Avatar name={item.receiver?.displayName} uri={item.receiver?.avatarUrl} size={40} />
-        <View style={styles.info}>
-          <Text style={styles.displayName}>{item.receiver?.displayName?.toUpperCase()}</Text>
-          <Text style={styles.username}>@{item.receiver?.username?.toLowerCase()}</Text>
+  // For testing, split by client identity checks
+  const incomingList = requests.filter((r) => r.type === 'INCOMING');
+  const outgoingList = requests.filter((r) => r.type === 'OUTGOING');
+  const activeList = activeTab === 'incoming' ? incomingList : outgoingList;
+
+  const renderRequestItem = ({ item }: { item: any }) => {
+    const peer = item.peer;
+    if (!peer) return null;
+
+    return (
+      <BrutalistCard accentColor="#FFFFFF" padding={12} style={styles.requestCard}>
+        <View style={styles.cardRow}>
+          <Avatar name={peer.displayName || peer.username} uri={peer.avatarUrl} size={44} />
+          
+          <View style={styles.peerInfo}>
+            <Text style={styles.displayName}>{peer.displayName?.toUpperCase()}</Text>
+            <Text style={styles.username}>@{peer.username.toLowerCase()}</Text>
+            <Text style={styles.dateLabel}>
+              SENT: {new Date(item.createdAt).toLocaleDateString()}
+            </Text>
+          </View>
+
+          {activeTab === 'incoming' ? (
+            <View style={styles.btnRow}>
+              <BrutalistButton
+                onPress={() => handleRespond(item.id, true)}
+                style={styles.actionBtn}
+                accentColor={BRUTALIST_COLORS.green}
+                textStyle={{ fontSize: 10 }}
+                title="OK"
+              />
+              <BrutalistButton
+                onPress={() => handleRespond(item.id, false)}
+                style={styles.actionBtn}
+                accentColor={BRUTALIST_COLORS.red}
+                textStyle={{ fontSize: 10, color: '#FFFFFF' }}
+                title="DECLINE"
+              />
+            </View>
+          ) : (
+            <BrutalistButton
+              onPress={() => handleCancel(item.id)}
+              style={styles.cancelBtn}
+              accentColor={BRUTALIST_COLORS.yellow}
+              textStyle={{ fontSize: 10 }}
+              title="CANCEL"
+            />
+          )}
         </View>
-        <RetroButton
-          title="CANCEL"
-          onPress={() => handleCancel(item.id)}
-          style={styles.cancelBtn}
-        />
-      </View>
-    </RetroPanel>
-  );
+      </BrutalistCard>
+    );
+  };
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
       <View style={styles.statusBarSpacer} />
-      
-      <RetroWindow
-        title="MESSAGE_REQUESTS.EXE"
-        onClose={() => navigation.goBack()}
-        contentStyle={styles.windowContent}
-      >
-        {/* Tabs */}
-        <View style={styles.tabsRow}>
-          <TouchableOpacity
-            onPress={() => setActiveTab('incoming')}
-            style={[styles.tabBtn, activeTab === 'incoming' && styles.activeTabBtn]}
-          >
-            <Inbox size={14} color="#000" style={{ marginRight: 6 }} />
-            <Text style={[styles.tabBtnText, activeTab === 'incoming' && styles.activeTabBtnText]}>
-              INCOMING ({incoming.length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => setActiveTab('outgoing')}
-            style={[styles.tabBtn, activeTab === 'outgoing' && styles.activeTabBtn]}
-          >
-            <Send size={14} color="#000" style={{ marginRight: 6 }} />
-            <Text style={[styles.tabBtnText, activeTab === 'outgoing' && styles.activeTabBtnText]}>
-              OUTGOING ({outgoing.length})
-            </Text>
-          </TouchableOpacity>
-        </View>
 
+      {/* Header Bar */}
+      <View style={styles.header}>
+        <BrutalistButton onPress={() => navigation.goBack()} style={styles.backBtn} accentColor={BRUTALIST_COLORS.yellow}>
+          <ArrowLeft size={18} color="#000000" />
+        </BrutalistButton>
+        <Text style={styles.headerTitle}>MESSAGE REQUESTS</Text>
+        <View style={{ width: 36 }} />
+      </View>
+
+      {/* Tab select bar */}
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          onPress={() => setActiveTab('incoming')}
+          style={[
+            styles.tab,
+            {
+              backgroundColor: activeTab === 'incoming' ? BRUTALIST_COLORS.yellow : '#FFFFFF',
+              borderRightWidth: BRUTALIST_STYLES.borderWidthThin,
+            }
+          ]}
+        >
+          <Inbox size={14} color="#000000" style={{ marginRight: 6 }} />
+          <Text style={styles.tabText}>INCOMING ({incomingList.length})</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => setActiveTab('outgoing')}
+          style={[
+            styles.tab,
+            {
+              backgroundColor: activeTab === 'outgoing' ? BRUTALIST_COLORS.yellow : '#FFFFFF',
+            }
+          ]}
+        >
+          <Send size={14} color="#000000" style={{ marginRight: 6 }} />
+          <Text style={styles.tabText}>OUTGOING ({outgoingList.length})</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Requests list container */}
+      <View style={{ flex: 1 }}>
         {loading ? (
-          <View style={styles.centerContainer}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
+          <View style={styles.center}>
+            <ActivityIndicator color="#000000" size="large" />
           </View>
         ) : (
           <FlatList
-            data={activeTab === 'incoming' ? incoming : outgoing}
+            data={activeList}
             keyExtractor={(item) => item.id}
-            renderItem={activeTab === 'incoming' ? renderIncomingItem : renderOutgoingItem}
+            renderItem={renderRequestItem}
             contentContainerStyle={styles.listContent}
             ListEmptyComponent={
-              <View style={styles.centerContainer}>
-                <Text style={styles.emptyText}>NO MESSAGE REQUESTS FOUND</Text>
+              <View style={styles.center}>
+                <BrutalistCard accentColor={BRUTALIST_COLORS.blue} padding={20}>
+                  <View style={{ alignItems: 'center' }}>
+                    <Inbox size={28} color="#FFFFFF" style={{ marginBottom: 12 }} />
+                    <Text style={styles.emptyTitle}>NO REQUESTS PENDING</Text>
+                    <Text style={styles.emptySub}>
+                      Your incoming and outgoing E2EE channels are clean.
+                    </Text>
+                  </View>
+                </BrutalistCard>
               </View>
             }
           />
         )}
-      </RetroWindow>
+      </View>
     </View>
   );
 };
@@ -171,107 +191,120 @@ export const MessageRequestsScreen: React.FC<any> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: RETRO_COLORS.desktop,
-    padding: 8,
+    backgroundColor: BRUTALIST_COLORS.background,
+    paddingHorizontal: 16,
   },
   statusBarSpacer: {
-    height: Platform.OS === 'android' ? 34 : 20,
+    height: Platform.OS === 'android' ? 44 : 20,
   },
-  windowContent: {
-    flex: 1,
-    padding: 8,
-  },
-  tabsRow: {
+  header: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
     marginBottom: 10,
-    borderBottomWidth: 2,
-    borderBottomColor: RETRO_COLORS.panelDark,
-    paddingBottom: 2,
   },
-  tabBtn: {
+  backBtn: {
+    width: 34,
+    height: 34,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#000000',
+  },
+  tabBar: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    borderWidth: BRUTALIST_STYLES.borderWidth,
+    borderColor: '#000000',
+    borderRadius: BRUTALIST_STYLES.borderRadiusSmall,
+    overflow: 'hidden',
+  },
+  tab: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
-    backgroundColor: '#c0c0c0',
-    borderWidth: 1,
-    borderColor: '#808080',
+    paddingVertical: 10,
   },
-  activeTabBtn: {
-    backgroundColor: '#fff',
-    borderBottomWidth: 0,
-    borderColor: '#0a0a0a',
-  },
-  tabBtnText: {
+  tabText: {
     fontSize: 11,
     fontWeight: 'bold',
-    fontFamily: 'monospace',
-    color: '#333',
-  },
-  activeTabBtnText: {
-    color: '#000',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#000000',
   },
   listContent: {
-    paddingBottom: 20,
+    paddingBottom: 40,
   },
-  card: {
-    marginBottom: 8,
-    padding: 10,
+  requestCard: {
+    marginBottom: 12,
   },
-  row: {
+  cardRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  info: {
+  peerInfo: {
     flex: 1,
     marginLeft: 12,
+    marginRight: 6,
   },
   displayName: {
-    color: '#000',
-    fontSize: 14,
-    fontWeight: 'bold',
-    fontFamily: 'monospace',
+    fontSize: 12,
+    fontWeight: '900',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#000000',
   },
   username: {
-    color: '#555',
-    fontSize: 11,
-    fontFamily: 'monospace',
+    fontSize: 10,
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#555555',
+    marginTop: 1,
+  },
+  dateLabel: {
+    fontSize: 8,
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#888888',
     marginTop: 2,
   },
   btnRow: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: 10,
-    gap: 8,
+    gap: 4,
   },
-  acceptBtn: {
-    backgroundColor: '#d4d0c8',
-    borderColor: '#008000',
-    paddingVertical: 4,
-    paddingHorizontal: 12,
-  },
-  declineBtn: {
-    backgroundColor: '#d4d0c8',
-    borderColor: '#800000',
-    paddingVertical: 4,
-    paddingHorizontal: 12,
+  actionBtn: {
+    height: 32,
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 0,
   },
   cancelBtn: {
-    backgroundColor: '#d4d0c8',
-    paddingVertical: 4,
+    height: 32,
+    justifyContent: 'center',
     paddingHorizontal: 10,
+    paddingVertical: 0,
   },
-  centerContainer: {
+  center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 40,
+    marginTop: 40,
   },
-  emptyText: {
-    color: '#555',
-    fontSize: 12,
-    fontFamily: 'monospace',
-    fontWeight: 'bold',
+  emptyTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#FFFFFF',
+  },
+  emptySub: {
+    fontSize: 9,
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#EEEEEE',
+    marginTop: 6,
+    textAlign: 'center',
   },
 });

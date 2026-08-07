@@ -1,17 +1,42 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, Image, Modal, TextInput, Platform } from 'react-native';
-import { ArrowLeft, Search, Music, Play, Pause, SkipForward, SkipBack, Heart, Plus, Download, ListMusic, Shuffle, Repeat } from 'lucide-react-native';
-import { RetroWindow } from '../../components/RetroWindow';
-import { RetroButton } from '../../components/RetroButton';
-import { RetroPanel } from '../../components/RetroPanel';
-import { RetroTextInput } from '../../components/RetroTextInput';
-import { RETRO_COLORS } from '../../theme/retroTheme';
-import { COLORS } from '../../theme/colors';
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StatusBar,
+  Platform,
+} from 'react-native';
+import {
+  Search,
+  Music,
+  Heart,
+  Plus,
+  Play,
+  Pause,
+  SkipForward,
+  SkipBack,
+  Shuffle,
+  Repeat,
+  ArrowLeft,
+  Trash2,
+  ListMusic,
+  Share2,
+} from 'lucide-react-native';
+import Slider from '@react-native-community/slider';
+import { BRUTALIST_COLORS, BRUTALIST_STYLES } from '../../theme/brutalistTheme';
+import { BrutalistCard } from '../../components/BrutalistCard';
+import { BrutalistButton } from '../../components/BrutalistButton';
+import { BrutalistTextInput } from '../../components/BrutalistTextInput';
 import { apiClient } from '../../api/client';
 import { useMusicStore, Track } from '../../store/musicStore';
 
 export const MusicScreen: React.FC<any> = ({ navigation }) => {
-  const [activeTab, setActiveTab] = useState<'search' | 'playlists' | 'liked'>('search');
+  const [activeTab, setActiveTab] = useState<'search' | 'playlists' | 'likes'>('search');
   
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -21,20 +46,10 @@ export const MusicScreen: React.FC<any> = ({ navigation }) => {
   // Playlists state
   const [playlists, setPlaylists] = useState<any[]>([]);
   const [loadingPlaylists, setLoadingPlaylists] = useState(false);
-  const [selectedPlaylist, setSelectedPlaylist] = useState<any | null>(null);
-
-  // Liked songs state
-  const [likedSongs, setLikedSongs] = useState<Track[]>([]);
-  const [loadingLikes, setLoadingLikes] = useState(false);
-
-  // Modals state
-  const [showPlaylistCreate, setShowPlaylistCreate] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
-  const [showSpotifyImport, setShowSpotifyImport] = useState(false);
   const [spotifyUrl, setSpotifyUrl] = useState('');
-  const [importing, setImporting] = useState(false);
+  const [importingSpotify, setImportingSpotify] = useState(false);
 
-  // Global player state
   const {
     currentTrack,
     isPlaying,
@@ -42,42 +57,37 @@ export const MusicScreen: React.FC<any> = ({ navigation }) => {
     duration,
     isLooping,
     isShuffled,
+    queue,
+    likedSongs,
     playTrack,
     pauseTrack,
     resumeTrack,
     nextTrack,
     prevTrack,
-    seek,
     toggleLoop,
     toggleShuffle,
+    addToQueue,
+    removeFromQueue,
+    likeTrack,
+    unlikeTrack,
+    fetchLikedSongs,
+    seekTrack,
   } = useMusicStore();
 
   useEffect(() => {
-    fetchPlaylists();
     fetchLikedSongs();
+    loadPlaylists();
   }, []);
 
-  const fetchPlaylists = async () => {
+  const loadPlaylists = async () => {
     try {
       setLoadingPlaylists(true);
       const res = await apiClient.get('/music/playlists');
       setPlaylists(res.data || []);
-    } catch (err) {
-      console.error('Fetch playlists failed:', err);
+    } catch (e) {
+      console.warn('Failed to load playlists:', e);
     } finally {
       setLoadingPlaylists(false);
-    }
-  };
-
-  const fetchLikedSongs = async () => {
-    try {
-      setLoadingLikes(true);
-      const res = await apiClient.get('/music/liked-songs');
-      setLikedSongs(res.data || []);
-    } catch (err) {
-      console.error('Fetch liked songs failed:', err);
-    } finally {
-      setLoadingLikes(false);
     }
   };
 
@@ -87,9 +97,8 @@ export const MusicScreen: React.FC<any> = ({ navigation }) => {
       setSearching(true);
       const res = await apiClient.get(`/music/search?q=${encodeURIComponent(searchQuery)}`);
       setSearchResults(res.data || []);
-    } catch (err) {
-      console.error('Music search failed:', err);
-      Alert.alert('SEARCH ERROR', 'FAILED TO RETRIEVE MUSIC RESULTS.');
+    } catch (e) {
+      Alert.alert('ERROR', 'FAILED TO QUERY AUDIO CATALOG.');
     } finally {
       setSearching(false);
     }
@@ -98,387 +107,319 @@ export const MusicScreen: React.FC<any> = ({ navigation }) => {
   const handleCreatePlaylist = async () => {
     if (!newPlaylistName.trim()) return;
     try {
-      await apiClient.post('/music/playlists', { name: newPlaylistName });
-      Alert.alert('SUCCESS', 'PLAYLIST CREATED SUCCESSFULLY.');
+      await apiClient.post('/music/playlist', { name: newPlaylistName });
       setNewPlaylistName('');
-      setShowPlaylistCreate(false);
-      fetchPlaylists();
-    } catch (err) {
-      console.error('Create playlist failed:', err);
+      Alert.alert('SUCCESS', 'PLAYLIST DECK CREATED.');
+      loadPlaylists();
+    } catch (e) {
+      Alert.alert('ERROR', 'FAILED TO CREATE PLAYLIST.');
     }
   };
 
-  const handleImportSpotify = async () => {
+  const handleSpotifyImport = async () => {
     if (!spotifyUrl.trim()) return;
     try {
-      setImporting(true);
-      const res = await apiClient.post('/music/spotify-import', { playlistUrl: spotifyUrl });
-      Alert.alert('IMPORT COMPLETE', `IMPORTED "${res.data.name?.toUpperCase()}" WITH ${res.data.tracks?.length} SONGS.`);
+      setImportingSpotify(true);
+      const res = await apiClient.post('/music/spotify-import', { url: spotifyUrl });
       setSpotifyUrl('');
-      setShowSpotifyImport(false);
-      fetchPlaylists();
-    } catch (err: any) {
-      console.error('Spotify import failed:', err);
-      const msg = err.response?.data?.message || 'FAILED TO IMPORT SPOTIFY PLAYLIST.';
-      Alert.alert('IMPORT ERROR', msg.toUpperCase());
+      Alert.alert('IMPORT INITIATED', `${res.data?.message?.toUpperCase() || 'METADATA RESOLVED.'}`);
+      loadPlaylists();
+    } catch (e: any) {
+      Alert.alert('IMPORT FAILED', e.response?.data?.message?.toUpperCase() || 'UNABLE TO CONVERT PLAYLIST.');
     } finally {
-      setImporting(false);
+      setImportingSpotify(false);
     }
   };
 
-  const handleToggleLike = async (track: Track) => {
-    const isLiked = likedSongs.some((s) => s.trackUri === track.trackUri);
-    try {
-      if (isLiked) {
-        const item = likedSongs.find((s) => s.trackUri === track.trackUri);
-        if (item && (item as any).id) {
-          await apiClient.delete(`/music/liked-songs/${(item as any).id}`);
-        }
-      } else {
-        await apiClient.post('/music/liked-songs', track);
-      }
-      fetchLikedSongs();
-    } catch (err) {
-      console.error('Like toggle failed:', err);
-    }
+  const formatMillis = (millis: number) => {
+    const totalSecs = Math.floor(millis / 1000);
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
-  const handleSelectPlaylist = async (playlist: any) => {
-    try {
-      const res = await apiClient.get(`/music/playlists/${playlist.id}`);
-      setSelectedPlaylist(res.data);
-    } catch (err) {
-      console.error('Get playlist details failed:', err);
-    }
-  };
-
-  const renderTrackItem = ({ item, index, sectionTracks }: { item: Track; index: number; sectionTracks: Track[] }) => {
+  const renderTrackItem = ({ item }: { item: Track }) => {
     const isCurrent = currentTrack?.trackUri === item.trackUri;
-    const isLiked = likedSongs.some((s) => s.trackUri === item.trackUri);
-    
+    const isLiked = likedSongs.some((s: any) => s.trackUri === item.trackUri);
+
     return (
-      <TouchableOpacity
-        activeOpacity={0.8}
-        onPress={() => playTrack(item, sectionTracks)}
-        style={[styles.trackRow, isCurrent && styles.activeTrackRow]}
-      >
-        <View style={styles.trackDetails}>
-          <Text style={[styles.trackTitle, isCurrent && styles.activeTrackText]} numberOfLines={1}>
-            {item.title}
-          </Text>
-          <Text style={styles.trackArtist} numberOfLines={1}>
-            {item.artist}
-          </Text>
+      <BrutalistCard accentColor="#FFFFFF" padding={10} style={styles.trackCard}>
+        <View style={styles.trackRow}>
+          <Music size={18} color="#000" style={{ marginRight: 8 }} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.trackTitle, isCurrent && { color: BRUTALIST_COLORS.pink }]} numberOfLines={1}>
+              {item.title.toUpperCase()}
+            </Text>
+            <Text style={styles.trackArtist} numberOfLines={1}>
+              {item.artist.toUpperCase()}
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <TouchableOpacity onPress={() => (isLiked ? unlikeTrack(item.trackUri) : likeTrack(item))}>
+              <Heart size={18} color={isLiked ? BRUTALIST_COLORS.red : '#000000'} fill={isLiked ? BRUTALIST_COLORS.red : 'transparent'} />
+            </TouchableOpacity>
+            <BrutalistButton
+              onPress={() => playTrack(item)}
+              style={styles.trackPlayBtn}
+              accentColor={isCurrent ? BRUTALIST_COLORS.pink : BRUTALIST_COLORS.yellow}
+              title={isCurrent && isPlaying ? "⏸" : "▶"}
+            />
+          </View>
         </View>
-        
-        <View style={styles.trackActions}>
-          <TouchableOpacity onPress={() => handleToggleLike(item)} style={styles.likeBtn}>
-            <Heart size={16} color={isLiked ? '#800000' : '#808080'} fill={isLiked ? '#800000' : 'transparent'} />
-          </TouchableOpacity>
-          <Text style={styles.trackDuration}>{Math.floor(item.duration / 60)}:{item.duration % 60 < 10 ? '0' : ''}{item.duration % 60}</Text>
-        </View>
-      </TouchableOpacity>
+      </BrutalistCard>
     );
   };
 
-  const formatTime = (millis: number) => {
-    const secs = Math.floor(millis / 1000);
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${m}:${s < 10 ? '0' : ''}${s}`;
-  };
-
-  const progressPercent = duration > 0 ? (position / duration) * 100 : 0;
-
   return (
     <View style={styles.container}>
+      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
       <View style={styles.statusBarSpacer} />
-      
-      <RetroWindow
-        title="MUSIC_PLAYER.EXE"
-        onClose={() => navigation.goBack()}
-        contentStyle={styles.windowContent}
-      >
-        {/* Navigation Tabs */}
-        <View style={styles.tabBar}>
-          <TouchableOpacity
-            onPress={() => { setActiveTab('search'); setSelectedPlaylist(null); }}
-            style={[styles.tab, activeTab === 'search' && styles.activeTab]}
-          >
-            <Search size={14} color="#000" style={{ marginRight: 6 }} />
-            <Text style={styles.tabText}>SEARCH</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => { setActiveTab('playlists'); setSelectedPlaylist(null); }}
-            style={[styles.tab, activeTab === 'playlists' && styles.activeTab]}
-          >
-            <ListMusic size={14} color="#000" style={{ marginRight: 6 }} />
-            <Text style={styles.tabText}>PLAYLISTS</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => { setActiveTab('liked'); setSelectedPlaylist(null); }}
-            style={[styles.tab, activeTab === 'liked' && styles.activeTab]}
-          >
-            <Heart size={14} color="#000" style={{ marginRight: 6 }} />
-            <Text style={styles.tabText}>LIKED</Text>
-          </TouchableOpacity>
-        </View>
 
-        {/* Tab Content Panel */}
-        <RetroPanel style={styles.tabContentPanel} raised={false}>
-          {activeTab === 'search' && (
-            <View style={{ flex: 1 }}>
-              <View style={styles.searchRow}>
-                <RetroTextInput
-                  placeholder="SEARCH MUSIC / YT TRACKS..."
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  containerStyle={{ flex: 1, marginRight: 6 }}
-                  onSubmitEditing={handleSearch}
-                />
-                <RetroButton title="SEARCH" onPress={handleSearch} />
-              </View>
+      {/* Header Bar */}
+      <View style={styles.header}>
+        <BrutalistButton onPress={() => navigation.goBack()} style={styles.backBtn} accentColor={BRUTALIST_COLORS.yellow}>
+          <ArrowLeft size={18} color="#000000" />
+        </BrutalistButton>
+        <Text style={styles.headerTitle}>MUSIC DECK</Text>
+        <View style={{ width: 36 }} />
+      </View>
 
-              {searching ? (
-                <View style={styles.centerContainer}>
-                  <ActivityIndicator color={COLORS.primary} size="large" />
-                </View>
-              ) : (
-                <FlatList
-                  data={searchResults}
-                  keyExtractor={(item) => item.trackUri}
-                  renderItem={(info) => renderTrackItem({ ...info, sectionTracks: searchResults })}
-                  contentContainerStyle={styles.listContainer}
-                  ListEmptyComponent={
-                    <View style={styles.centerContainer}>
-                      <Text style={styles.emptyText}>ENTER SEARCH TERM AND DIAL PLAYBACK</Text>
-                    </View>
-                  }
-                />
-              )}
-            </View>
-          )}
+      {/* Tabs list */}
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          onPress={() => setActiveTab('search')}
+          style={[
+            styles.tab,
+            {
+              backgroundColor: activeTab === 'search' ? BRUTALIST_COLORS.yellow : '#FFFFFF',
+              borderRightWidth: BRUTALIST_STYLES.borderWidthThin,
+            }
+          ]}
+        >
+          <Text style={styles.tabText}>SEARCH</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setActiveTab('playlists')}
+          style={[
+            styles.tab,
+            {
+              backgroundColor: activeTab === 'playlists' ? BRUTALIST_COLORS.yellow : '#FFFFFF',
+              borderRightWidth: BRUTALIST_STYLES.borderWidthThin,
+            }
+          ]}
+        >
+          <Text style={styles.tabText}>PLAYLISTS</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => setActiveTab('likes')}
+          style={[
+            styles.tab,
+            {
+              backgroundColor: activeTab === 'likes' ? BRUTALIST_COLORS.yellow : '#FFFFFF',
+            }
+          ]}
+        >
+          <Text style={styles.tabText}>LIKES</Text>
+        </TouchableOpacity>
+      </View>
 
-          {activeTab === 'playlists' && (
-            <View style={{ flex: 1 }}>
-              {!selectedPlaylist ? (
-                <View style={{ flex: 1 }}>
-                  <View style={styles.playlistActionRow}>
-                    <RetroButton
-                      onPress={() => setShowPlaylistCreate(true)}
-                      style={styles.playlistActionBtn}
-                    >
-                      <Plus size={14} color="#000" style={{ marginRight: 6 }} />
-                      <Text style={styles.btnText}>NEW PLAYLIST</Text>
-                    </RetroButton>
-                    <RetroButton
-                      onPress={() => setShowSpotifyImport(true)}
-                      style={styles.playlistActionBtn}
-                    >
-                      <Download size={14} color="#000" style={{ marginRight: 6 }} />
-                      <Text style={styles.btnText}>SPOTIFY IMPORT</Text>
-                    </RetroButton>
-                  </View>
-
-                  {loadingPlaylists ? (
-                    <View style={styles.centerContainer}>
-                      <ActivityIndicator color={COLORS.primary} size="large" />
-                    </View>
-                  ) : (
-                    <FlatList
-                      data={playlists}
-                      keyExtractor={(item) => item.id}
-                      renderItem={({ item }) => (
-                        <TouchableOpacity
-                          activeOpacity={0.8}
-                          onPress={() => handleSelectPlaylist(item)}
-                          style={styles.playlistRow}
-                        >
-                          <Music size={24} color="#000" style={{ marginRight: 12 }} />
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.playlistName}>{item.name.toUpperCase()}</Text>
-                            <Text style={styles.playlistTracksCount}>{item._count?.tracks || 0} TRACKS</Text>
-                          </View>
-                        </TouchableOpacity>
-                      )}
-                      contentContainerStyle={styles.listContainer}
-                      ListEmptyComponent={
-                        <View style={styles.centerContainer}>
-                          <Text style={styles.emptyText}>NO CUSTOM PLAYLISTS</Text>
-                        </View>
-                      }
-                    />
-                  )}
-                </View>
-              ) : (
-                <View style={{ flex: 1 }}>
-                  {/* Playlist Header details */}
-                  <View style={styles.playlistDetailsHeader}>
-                    <RetroButton title="BACK" onPress={() => setSelectedPlaylist(null)} style={{ marginRight: 10 }} />
-                    <Text style={styles.playlistHeaderTitle} numberOfLines={1}>{selectedPlaylist.name.toUpperCase()}</Text>
-                  </View>
-                  
-                  <FlatList
-                    data={selectedPlaylist.tracks || []}
-                    keyExtractor={(item) => item.id}
-                    renderItem={(info) => renderTrackItem({ ...info, sectionTracks: selectedPlaylist.tracks })}
-                    contentContainerStyle={styles.listContainer}
-                    ListEmptyComponent={
-                      <View style={styles.centerContainer}>
-                        <Text style={styles.emptyText}>PLAYLIST IS EMPTY</Text>
-                      </View>
-                    }
-                  />
-                </View>
-              )}
-            </View>
-          )}
-
-          {activeTab === 'liked' && (
-            <View style={{ flex: 1 }}>
-              {loadingLikes ? (
-                <View style={styles.centerContainer}>
-                  <ActivityIndicator color={COLORS.primary} size="large" />
-                </View>
-              ) : (
-                <FlatList
-                  data={likedSongs}
-                  keyExtractor={(item) => item.trackUri}
-                  renderItem={(info) => renderTrackItem({ ...info, sectionTracks: likedSongs })}
-                  contentContainerStyle={styles.listContainer}
-                  ListEmptyComponent={
-                    <View style={styles.centerContainer}>
-                      <Text style={styles.emptyText}>NO LIKED SONGS FOUND</Text>
-                    </View>
-                  }
-                />
-              )}
-            </View>
-          )}
-        </RetroPanel>
-
-        {/* Dynamic Interactive Now Playing Panel */}
-        <RetroPanel style={styles.playerPanel} raised>
-          {currentTrack ? (
-            <View style={styles.playerContainer}>
-              <View style={styles.playerHeader}>
-                <View style={styles.albumFrame}>
-                  {currentTrack.coverUrl ? (
-                    <Image source={{ uri: currentTrack.coverUrl }} style={styles.albumArt} />
-                  ) : (
-                    <Music size={28} color="#000" />
-                  )}
-                </View>
-                <View style={styles.playerMeta}>
-                  <Text style={styles.nowPlayingTitle} numberOfLines={1}>{currentTrack.title}</Text>
-                  <Text style={styles.nowPlayingArtist} numberOfLines={1}>{currentTrack.artist}</Text>
-                </View>
-              </View>
-
-              {/* Progress Bar Timeline */}
-              <View style={styles.progressRow}>
-                <Text style={styles.timeText}>{formatTime(position)}</Text>
-                <View style={styles.progressLineBg}>
-                  <View style={[styles.progressLineFill, { width: `${progressPercent}%` }]} />
-                </View>
-                <Text style={styles.timeText}>{formatTime(duration)}</Text>
-              </View>
-
-              {/* Playback Button Actions */}
-              <View style={styles.controlRow}>
-                <RetroButton onPress={toggleShuffle} style={[styles.miniControlBtn, isShuffled && styles.activeControlBtn]}>
-                  <Shuffle size={14} color="#000" />
-                </RetroButton>
-                
-                <RetroButton onPress={prevTrack} style={styles.miniControlBtn}>
-                  <SkipBack size={16} color="#000" fill="#000" />
-                </RetroButton>
-
-                <RetroButton
-                  onPress={isPlaying ? pauseTrack : resumeTrack}
-                  style={styles.playPauseBtn}
-                >
-                  {isPlaying ? (
-                    <Pause size={20} color="#000" fill="#000" />
-                  ) : (
-                    <Play size={20} color="#000" fill="#000" style={{ marginLeft: 2 }} />
-                  )}
-                </RetroButton>
-
-                <RetroButton onPress={nextTrack} style={styles.miniControlBtn}>
-                  <SkipForward size={16} color="#000" fill="#000" />
-                </RetroButton>
-
-                <RetroButton onPress={toggleLoop} style={[styles.miniControlBtn, isLooping && styles.activeControlBtn]}>
-                  <Repeat size={14} color="#000" />
-                </RetroButton>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.idlePlayer}>
-              <Music size={20} color="#808080" style={{ marginRight: 10 }} />
-              <Text style={styles.idleText}>NO SONG SELECT DECK LOADED</Text>
-            </View>
-          )}
-        </RetroPanel>
-      </RetroWindow>
-
-      {/* Playlist Create Modal */}
-      <Modal visible={showPlaylistCreate} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <RetroWindow
-            title="CREATE_PLAYLIST.EXE"
-            onClose={() => setShowPlaylistCreate(false)}
-            style={{ width: 280 }}
-          >
-            <View style={styles.modalContent}>
-              <Text style={styles.modalLabel}>ENTER PLAYLIST NAME:</Text>
-              <RetroTextInput
-                placeholder="MY ALBUM PLAYLIST"
-                value={newPlaylistName}
-                onChangeText={setNewPlaylistName}
-                containerStyle={{ marginBottom: 12 }}
+      {/* Tab Panels */}
+      <View style={{ flex: 1 }}>
+        {activeTab === 'search' && (
+          <View style={{ flex: 1 }}>
+            <View style={styles.searchRow}>
+              <BrutalistTextInput
+                placeholder="SEARCH TRACK TITLE OR ARTIST..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                containerStyle={{ flex: 1 }}
               />
-              <View style={styles.modalBtnRow}>
-                <RetroButton title="CREATE" onPress={handleCreatePlaylist} style={{ flex: 1, marginRight: 6 }} />
-                <RetroButton title="CANCEL" onPress={() => setShowPlaylistCreate(false)} style={{ flex: 1 }} />
-              </View>
+              <BrutalistButton
+                onPress={handleSearch}
+                style={styles.searchBtn}
+                accentColor={BRUTALIST_COLORS.yellow}
+              >
+                <Search size={18} color="#000000" />
+              </BrutalistButton>
             </View>
-          </RetroWindow>
-        </View>
-      </Modal>
 
-      {/* Spotify Import Modal */}
-      <Modal visible={showSpotifyImport} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <RetroWindow
-            title="SPOTIFY_IMPORT.EXE"
-            onClose={() => setShowSpotifyImport(false)}
-            style={{ width: 310 }}
-          >
-            <View style={styles.modalContent}>
-              <Text style={styles.modalLabel}>SPOTIFY PLAYLIST URL:</Text>
-              <RetroTextInput
-                placeholder="https://open.spotify.com/playlist/..."
-                value={spotifyUrl}
-                onChangeText={setSpotifyUrl}
-                containerStyle={{ marginBottom: 12 }}
+            {searching ? (
+              <View style={styles.center}>
+                <ActivityIndicator color="#000" size="large" />
+              </View>
+            ) : (
+              <FlatList
+                data={searchResults}
+                keyExtractor={(item) => item.trackUri}
+                renderItem={renderTrackItem}
+                contentContainerStyle={styles.listContent}
+                ListEmptyComponent={
+                  <View style={styles.center}>
+                    <Text style={styles.emptyText}>QUERY HIGH QUALITY STREAMS VIA LAVALINK</Text>
+                  </View>
+                }
               />
-              {importing ? (
-                <View style={{ paddingVertical: 10, alignItems: 'center' }}>
-                  <ActivityIndicator color={COLORS.primary} size="small" />
-                  <Text style={styles.importingText}>PARSING AND IMPORTING METADATA...</Text>
-                </View>
-              ) : (
-                <View style={styles.modalBtnRow}>
-                  <RetroButton title="IMPORT" onPress={handleImportSpotify} style={{ flex: 1, marginRight: 6 }} />
-                  <RetroButton title="CANCEL" onPress={() => setShowSpotifyImport(false)} style={{ flex: 1 }} />
-                </View>
-              )}
+            )}
+          </View>
+        )}
+
+        {activeTab === 'playlists' && (
+          <ScrollView contentContainerStyle={styles.scrollContent}>
+            {/* Create Playlist */}
+            <BrutalistCard accentColor="#FFFFFF" padding={12} style={styles.metaCard}>
+              <Text style={styles.label}>NEW PLAYLIST CONTAINER</Text>
+              <View style={styles.row}>
+                <BrutalistTextInput
+                  placeholder="PLAYLIST NAME..."
+                  value={newPlaylistName}
+                  onChangeText={setNewPlaylistName}
+                  containerStyle={{ flex: 1, marginRight: 8 }}
+                />
+                <BrutalistButton
+                  onPress={handleCreatePlaylist}
+                  title="CREATE"
+                  accentColor={BRUTALIST_COLORS.yellow}
+                />
+              </View>
+            </BrutalistCard>
+
+            {/* Spotify Importer */}
+            <BrutalistCard accentColor="#FFFFFF" padding={12} style={styles.metaCard}>
+              <Text style={styles.label}>IMPORT SPOTIFY PLAYLIST URL</Text>
+              <View style={styles.row}>
+                <BrutalistTextInput
+                  placeholder="SPOTIFY URL..."
+                  value={spotifyUrl}
+                  onChangeText={setSpotifyUrl}
+                  containerStyle={{ flex: 1, marginRight: 8 }}
+                />
+                <BrutalistButton
+                  onPress={handleSpotifyImport}
+                  title={importingSpotify ? "IMPORTING..." : "IMPORT"}
+                  accentColor={BRUTALIST_COLORS.green}
+                  disabled={importingSpotify}
+                />
+              </View>
+            </BrutalistCard>
+
+            {/* Playlist list */}
+            {loadingPlaylists ? (
+              <ActivityIndicator color="#000" />
+            ) : (
+              playlists.map((pl) => (
+                <BrutalistCard key={pl.id} accentColor="#FFFFFF" padding={12} style={styles.metaCard}>
+                  <View style={styles.row}>
+                    <ListMusic size={20} color="#000" style={{ marginRight: 8 }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.playlistName}>{pl.name.toUpperCase()}</Text>
+                      <Text style={styles.playlistTracks}>
+                        {pl.tracks?.length || 0} TRACKS RESOLVED
+                      </Text>
+                    </View>
+                    <BrutalistButton
+                      onPress={async () => {
+                        try {
+                          await apiClient.delete(`/music/playlist/${pl.id}`);
+                          loadPlaylists();
+                        } catch (e) {
+                          Alert.alert('ERROR', 'FAILED TO DELETE PLAYLIST.');
+                        }
+                      }}
+                      accentColor={BRUTALIST_COLORS.red}
+                      style={{ paddingHorizontal: 8, paddingVertical: 6 }}
+                    >
+                      <Trash2 size={12} color="#FFFFFF" />
+                    </BrutalistButton>
+                  </View>
+                </BrutalistCard>
+              ))
+            )}
+          </ScrollView>
+        )}
+
+        {activeTab === 'likes' && (
+          <FlatList
+            data={likedSongs}
+            keyExtractor={(item) => item.trackUri}
+            renderItem={renderTrackItem}
+            contentContainerStyle={styles.listContent}
+            ListEmptyComponent={
+              <View style={styles.center}>
+                <Text style={styles.emptyText}>NO SONGS SAVED IN YOUR LIKES PACKET</Text>
+              </View>
+            }
+          />
+        )}
+      </View>
+
+      {/* Brutalist Player Deck Panel */}
+      {currentTrack && (
+        <BrutalistCard accentColor={BRUTALIST_COLORS.yellow} padding={12} style={styles.playerDeck}>
+          <View style={styles.playerInfoRow}>
+            <Music size={18} color="#000000" style={{ marginRight: 8 }} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.playerTitle} numberOfLines={1}>
+                {currentTrack.title.toUpperCase()}
+              </Text>
+              <Text style={styles.playerArtist} numberOfLines={1}>
+                {currentTrack.artist.toUpperCase()}
+              </Text>
             </View>
-          </RetroWindow>
-        </View>
-      </Modal>
+            <TouchableOpacity onPress={() => (likedSongs.some((s: any) => s.trackUri === currentTrack.trackUri) ? unlikeTrack(currentTrack.trackUri) : likeTrack(currentTrack))}>
+              <Heart size={20} color={likedSongs.some((s: any) => s.trackUri === currentTrack.trackUri) ? BRUTALIST_COLORS.red : '#000000'} fill={likedSongs.some((s: any) => s.trackUri === currentTrack.trackUri) ? BRUTALIST_COLORS.red : 'transparent'} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Timeline Seeker Slider */}
+          <View style={styles.progressSection}>
+            <Slider
+              style={styles.slider}
+              minimumValue={0}
+              maximumValue={duration}
+              value={position}
+              onSlidingComplete={seekTrack}
+              minimumTrackTintColor="#000000"
+              maximumTrackTintColor="#555555"
+              thumbTintColor="#000000"
+            />
+            <View style={styles.timeLabelRow}>
+              <Text style={styles.timeTextLabel}>{formatMillis(position)}</Text>
+              <Text style={styles.timeTextLabel}>{formatMillis(duration)}</Text>
+            </View>
+          </View>
+
+          {/* Action transport controls */}
+          <View style={styles.controlRow}>
+            <BrutalistButton onPress={toggleShuffle} style={styles.miniCtrlBtn} accentColor={isShuffled ? BRUTALIST_COLORS.pink : '#FFFFFF'}>
+              <Shuffle size={14} color="#000000" />
+            </BrutalistButton>
+            
+            <BrutalistButton onPress={prevTrack} style={styles.miniCtrlBtn} accentColor="#FFFFFF">
+              <SkipBack size={16} color="#000000" fill="#000000" />
+            </BrutalistButton>
+
+            <BrutalistButton
+              onPress={isPlaying ? pauseTrack : resumeTrack}
+              style={styles.playPauseBtn}
+              accentColor={BRUTALIST_COLORS.green}
+            >
+              {isPlaying ? (
+                <Pause size={18} color="#000" fill="#000" />
+              ) : (
+                <Play size={18} color="#000" fill="#000" style={{ marginLeft: 2 }} />
+              )}
+            </BrutalistButton>
+
+            <BrutalistButton onPress={nextTrack} style={styles.miniCtrlBtn} accentColor="#FFFFFF">
+              <SkipForward size={16} color="#000000" fill="#000000" />
+            </BrutalistButton>
+
+            <BrutalistButton onPress={toggleLoop} style={styles.miniCtrlBtn} accentColor={isLooping ? BRUTALIST_COLORS.pink : '#FFFFFF'}>
+              <Repeat size={14} color="#000000" />
+            </BrutalistButton>
+          </View>
+        </BrutalistCard>
+      )}
     </View>
   );
 };
@@ -486,294 +427,194 @@ export const MusicScreen: React.FC<any> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: RETRO_COLORS.desktop,
-    padding: 8,
+    backgroundColor: BRUTALIST_COLORS.background,
+    paddingHorizontal: 16,
   },
   statusBarSpacer: {
-    height: Platform.OS === 'android' ? 34 : 20,
+    height: Platform.OS === 'android' ? 44 : 20,
   },
-  windowContent: {
-    flex: 1,
-    padding: 8,
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginBottom: 10,
+  },
+  backBtn: {
+    width: 34,
+    height: 34,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#000000',
   },
   tabBar: {
     flexDirection: 'row',
-    marginBottom: 2,
-    zIndex: 10,
+    marginBottom: 16,
+    borderWidth: BRUTALIST_STYLES.borderWidth,
+    borderColor: '#000000',
+    borderRadius: BRUTALIST_STYLES.borderRadiusSmall,
+    overflow: 'hidden',
   },
   tab: {
     flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
-    backgroundColor: RETRO_COLORS.windowBackground,
-    borderWidth: 2,
-    borderTopColor: RETRO_COLORS.panelLight,
-    borderLeftColor: RETRO_COLORS.panelLight,
-    borderRightColor: RETRO_COLORS.panelDark,
-    borderBottomColor: RETRO_COLORS.panelDark,
-  },
-  activeTab: {
-    backgroundColor: '#fff',
-    borderBottomWidth: 0,
-    borderTopColor: RETRO_COLORS.panelLight,
-    borderLeftColor: RETRO_COLORS.panelLight,
-    borderRightColor: RETRO_COLORS.panelDark,
+    paddingVertical: 10,
   },
   tabText: {
     fontSize: 11,
     fontWeight: 'bold',
-    fontFamily: 'monospace',
+    fontFamily: BRUTALIST_STYLES.fontBold,
     color: '#000000',
-  },
-  tabContentPanel: {
-    flex: 1,
-    padding: 8,
-    borderWidth: 2,
-    borderTopColor: RETRO_COLORS.panelDark,
-    borderLeftColor: RETRO_COLORS.panelDark,
-    borderRightColor: RETRO_COLORS.panelLight,
-    borderBottomColor: RETRO_COLORS.panelLight,
-    backgroundColor: '#fff',
-    marginBottom: 8,
   },
   searchRow: {
     flexDirection: 'row',
-    marginBottom: 10,
+    marginBottom: 12,
+    gap: 8,
   },
-  listContainer: {
-    paddingBottom: 10,
+  searchBtn: {
+    width: 48,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  listContent: {
+    paddingBottom: 160,
+  },
+  scrollContent: {
+    paddingBottom: 180,
+  },
+  trackCard: {
+    marginBottom: 10,
   },
   trackRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  activeTrackRow: {
-    backgroundColor: '#000080',
-  },
-  trackDetails: {
-    flex: 1,
-    marginRight: 10,
   },
   trackTitle: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    fontFamily: 'monospace',
-    color: '#000',
-  },
-  activeTrackText: {
-    color: '#fff',
+    fontSize: 12,
+    fontWeight: '900',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#000000',
   },
   trackArtist: {
-    fontSize: 11,
-    fontFamily: 'monospace',
-    color: '#666',
-    marginTop: 2,
+    fontSize: 9,
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#555555',
+    marginTop: 1,
   },
-  trackActions: {
-    flexDirection: 'row',
+  trackPlayBtn: {
+    width: 32,
+    height: 32,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
     alignItems: 'center',
-  },
-  likeBtn: {
-    padding: 6,
-    marginRight: 6,
-  },
-  trackDuration: {
-    fontSize: 11,
-    fontFamily: 'monospace',
-    color: '#555',
-  },
-  centerContainer: {
-    flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 40,
   },
-  emptyText: {
-    color: '#808080',
-    fontSize: 12,
-    fontFamily: 'monospace',
-    fontWeight: 'bold',
-  },
-  playlistActionRow: {
-    flexDirection: 'row',
-    marginBottom: 10,
-    gap: 6,
-  },
-  playlistActionBtn: {
-    flex: 1,
-    flexDirection: 'row',
-  },
-  btnText: {
-    fontSize: 11,
-    fontFamily: 'monospace',
-    fontWeight: 'bold',
-  },
-  playlistRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#d4d0c8',
-  },
-  playlistName: {
-    fontSize: 13,
-    fontFamily: 'monospace',
-    fontWeight: 'bold',
-    color: '#000',
-  },
-  playlistTracksCount: {
-    fontSize: 10,
-    fontFamily: 'monospace',
-    color: '#808080',
-    marginTop: 2,
-  },
-  playlistDetailsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-    borderBottomWidth: 2,
-    borderBottomColor: '#808080',
-    paddingBottom: 6,
-  },
-  playlistHeaderTitle: {
-    fontSize: 14,
-    fontFamily: 'monospace',
-    fontWeight: 'bold',
-    color: '#000',
-    flex: 1,
-  },
-  playerPanel: {
-    padding: 10,
-  },
-  playerContainer: {
-    width: '100%',
-  },
-  playerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  albumFrame: {
-    width: 44,
-    height: 44,
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#808080',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  albumArt: {
-    width: 40,
-    height: 40,
-  },
-  playerMeta: {
-    flex: 1,
-  },
-  nowPlayingTitle: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    fontFamily: 'monospace',
-    color: '#000',
-  },
-  nowPlayingArtist: {
-    fontSize: 11,
-    fontFamily: 'monospace',
-    color: '#666',
-    marginTop: 2,
-  },
-  progressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  metaCard: {
     marginBottom: 12,
   },
-  timeText: {
-    fontSize: 10,
-    fontFamily: 'monospace',
-    color: '#333',
+  label: {
+    fontSize: 9,
+    fontWeight: '900',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#000000',
+    marginBottom: 4,
   },
-  progressLineBg: {
-    flex: 1,
-    height: 6,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#808080',
-    marginHorizontal: 8,
-    position: 'relative',
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  progressLineFill: {
-    height: '100%',
-    backgroundColor: '#000080',
+  playlistName: {
+    fontSize: 12,
+    fontWeight: '900',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#000000',
+  },
+  playlistTracks: {
+    fontSize: 9,
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#555555',
+  },
+  playerDeck: {
+    position: 'absolute',
+    bottom: 20,
+    left: 16,
+    right: 16,
+    zIndex: 99,
+  },
+  playerInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  playerTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#000000',
+  },
+  playerArtist: {
+    fontSize: 9,
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#333333',
+    marginTop: 1,
+  },
+  progressSection: {
+    marginBottom: 10,
+  },
+  slider: {
+    width: '100%',
+    height: 28,
+  },
+  timeLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  timeTextLabel: {
+    fontSize: 9,
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#000000',
+    fontWeight: 'bold',
   },
   controlRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'space-around',
     alignItems: 'center',
-    paddingHorizontal: 10,
   },
-  miniControlBtn: {
+  miniCtrlBtn: {
     width: 32,
-    height: 28,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
     paddingVertical: 0,
     paddingHorizontal: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  activeControlBtn: {
-    backgroundColor: '#fff',
-    borderColor: '#0a0a0a',
   },
   playPauseBtn: {
-    width: 46,
-    height: 38,
-    borderRadius: 0,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
   },
-  idlePlayer: {
-    flexDirection: 'row',
+  center: {
     alignItems: 'center',
     justifyContent: 'center',
-    height: 50,
+    paddingVertical: 60,
   },
-  idleText: {
-    color: '#555',
-    fontFamily: 'monospace',
-    fontWeight: 'bold',
+  emptyText: {
     fontSize: 11,
-  },
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    padding: 12,
-  },
-  modalLabel: {
-    fontSize: 11,
-    fontFamily: 'monospace',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#666666',
     fontWeight: 'bold',
-    color: '#000',
-    marginBottom: 6,
-  },
-  modalBtnRow: {
-    flexDirection: 'row',
-  },
-  importingText: {
-    fontSize: 9,
-    fontFamily: 'monospace',
-    color: '#555',
-    marginTop: 6,
     textAlign: 'center',
   },
 });

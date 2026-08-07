@@ -9,16 +9,14 @@ import {
   StatusBar,
   Platform,
   ActivityIndicator,
-  Image,
 } from 'react-native';
-import { Camera, User, FileText, LogOut, ShieldAlert } from 'lucide-react-native';
+import { Camera, User, FileText, LogOut, ArrowLeft, ShieldAlert } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { RetroWindow } from '../../components/RetroWindow';
-import { RetroButton } from '../../components/RetroButton';
-import { RetroTextInput } from '../../components/RetroTextInput';
-import { RetroPanel } from '../../components/RetroPanel';
+import { BRUTALIST_COLORS, BRUTALIST_STYLES } from '../../theme/brutalistTheme';
+import { BrutalistCard } from '../../components/BrutalistCard';
+import { BrutalistButton } from '../../components/BrutalistButton';
+import { BrutalistTextInput } from '../../components/BrutalistTextInput';
 import { Avatar } from '../../components/Avatar';
-import { RETRO_COLORS, RETRO_STYLES } from '../../theme/retroTheme';
 import { useAuthStore } from '../../store/authStore';
 import { apiClient, API_BASE_URL } from '../../api/client';
 
@@ -116,89 +114,95 @@ export const ProfileScreen: React.FC<any> = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
       <View style={styles.statusBarSpacer} />
 
-      <RetroWindow
-        title="USER_PROFILE.EXE"
-        onClose={() => navigation.goBack()}
-        contentStyle={styles.windowContent}
-        style={styles.mainWindow}
-      >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          {/* Avatar Profile Box */}
-          <RetroPanel raised style={styles.avatarPanel}>
-            <View style={styles.avatarRow}>
-              <View style={styles.avatarBezel}>
-                <Avatar name={user?.displayName || user?.username || 'User'} uri={avatarUrl} size={90} />
-                {uploadingImage && (
-                  <View style={styles.uploadOverlay}>
-                    <ActivityIndicator color="#FFF" size="small" />
-                  </View>
-                )}
-              </View>
-              
-              <View style={styles.avatarMeta}>
-                <Text style={styles.usernameText}>@{user?.username?.toUpperCase()}</Text>
-                <Text style={styles.emailText}>{user?.email}</Text>
-                <RetroButton onPress={handlePickAvatar} style={styles.cameraBtn}>
-                  <Camera size={12} color="#000" style={{ marginRight: 6 }} />
-                  <Text style={styles.btnText}>CHANGE PHOTO</Text>
-                </RetroButton>
-              </View>
+      {/* Header Bar */}
+      <View style={styles.header}>
+        <BrutalistButton onPress={() => navigation.goBack()} style={styles.backBtn} accentColor={BRUTALIST_COLORS.yellow}>
+          <ArrowLeft size={18} color="#000000" />
+        </BrutalistButton>
+        <Text style={styles.headerTitle}>EDIT PROFILE</Text>
+        <View style={{ width: 36 }} />
+      </View>
+
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        
+        {/* Profile Card Summary */}
+        <BrutalistCard accentColor={BRUTALIST_COLORS.cardBg} padding={16} style={styles.avatarCard}>
+          <View style={styles.avatarRow}>
+            {/* Square Bezel Avatar Box */}
+            <View style={styles.avatarBezel}>
+              <Avatar name={user?.displayName || user?.username || 'User'} uri={avatarUrl} size={84} />
+              {uploadingImage && (
+                <View style={styles.uploadOverlay}>
+                  <ActivityIndicator color="#000000" size="small" />
+                </View>
+              )}
             </View>
-          </RetroPanel>
 
-          {/* Edit Form */}
-          <Text style={styles.sectionTitle}>PERSONAL DETAILS</Text>
-          <RetroPanel raised style={styles.formPanel}>
-            <Text style={styles.label}>DISPLAY NAME</Text>
-            <RetroTextInput
-              placeholder="DISPLAY NAME"
-              value={displayName}
-              onChangeText={setDisplayName}
-              icon={<User size={16} color="#000" />}
-              containerStyle={{ marginBottom: 12 }}
-            />
-
-            <Text style={styles.label}>BIO / STATUS PACKET</Text>
-            <RetroTextInput
-              placeholder="Tell others about yourself..."
-              value={bio}
-              onChangeText={setBio}
-              multiline
-              icon={<FileText size={16} color="#000" />}
-              containerStyle={{ marginBottom: 16 }}
-            />
-
-            <RetroButton
-              title={loading ? "SAVING..." : "OK (SAVE CHANGES)"}
-              onPress={handleSaveProfile}
-              disabled={loading}
-            />
-          </RetroPanel>
-
-          {/* Security Info Card */}
-          <RetroPanel raised style={styles.infoPanel}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <ShieldAlert size={16} color="#000080" style={{ marginRight: 8 }} />
-              <Text style={styles.infoTitle}>IDENTITY SECURITY ACTIVE</Text>
+            <View style={styles.metaInfo}>
+              <Text style={styles.usernameText}>@{user?.username?.toUpperCase()}</Text>
+              <Text style={styles.emailText}>{user?.email}</Text>
+              <BrutalistButton onPress={handlePickAvatar} style={styles.cameraBtn} accentColor={BRUTALIST_COLORS.yellow}>
+                <Camera size={12} color="#000000" style={{ marginRight: 6 }} />
+                <Text style={styles.btnText}>PHOTO</Text>
+              </BrutalistButton>
             </View>
-            <Text style={styles.infoSub}>
-              Cryptographic keys verified. Peer connections are isolated and secure.
-            </Text>
-          </RetroPanel>
+          </View>
+        </BrutalistCard>
 
-          <RetroButton
-            onPress={logout}
-            style={styles.logoutBtn}
-            textStyle={{ color: '#800000' }}
-          >
-            <LogOut size={14} color="#800000" style={{ marginRight: 8 }} />
-            <Text style={styles.logoutText}>DISCONNECT ACCOUNT SESSION</Text>
-          </RetroButton>
-        </ScrollView>
-      </RetroWindow>
+        {/* Profile Form Card */}
+        <Text style={styles.sectionTitle}>PERSONAL DETAILS</Text>
+        <BrutalistCard accentColor={BRUTALIST_COLORS.cardBg} padding={16} style={styles.formCard}>
+          <Text style={styles.label}>DISPLAY NAME</Text>
+          <BrutalistTextInput
+            placeholder="DISPLAY NAME"
+            value={displayName}
+            onChangeText={setDisplayName}
+            icon={<User size={16} color="#000000" />}
+            containerStyle={{ marginBottom: 16 }}
+          />
+
+          <Text style={styles.label}>BIO / STATUS PACKET</Text>
+          <BrutalistTextInput
+            placeholder="Tell others about yourself..."
+            value={bio}
+            onChangeText={setBio}
+            icon={<FileText size={16} color="#000000" />}
+            containerStyle={{ marginBottom: 20 }}
+          />
+
+          <BrutalistButton
+            title={loading ? "SAVING..." : "SAVE PROFILE"}
+            onPress={handleSaveProfile}
+            disabled={loading}
+            accentColor={BRUTALIST_COLORS.yellow}
+          />
+        </BrutalistCard>
+
+        {/* Security Warning Box */}
+        <BrutalistCard accentColor={BRUTALIST_COLORS.blue} padding={12} style={styles.securityCard}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+            <ShieldAlert size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
+            <Text style={styles.securityTitle}>CRYPTOGRAPHIC IDENTITY ACTIVE</Text>
+          </View>
+          <Text style={styles.securitySub}>
+            Private keys verified. Chats are fully encrypted end-to-end.
+          </Text>
+        </BrutalistCard>
+
+        {/* Disconnect Account Session */}
+        <BrutalistButton
+          onPress={logout}
+          style={styles.logoutBtn}
+          accentColor={BRUTALIST_COLORS.red}
+        >
+          <LogOut size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
+          <Text style={styles.logoutText}>DISCONNECT DEPLOYED NODE</Text>
+        </BrutalistButton>
+
+      </ScrollView>
     </View>
   );
 };
@@ -206,120 +210,132 @@ export const ProfileScreen: React.FC<any> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: RETRO_COLORS.desktop,
-    padding: 6,
+    backgroundColor: BRUTALIST_COLORS.background,
+    paddingHorizontal: 16,
   },
   statusBarSpacer: {
-    height: Platform.OS === 'android' ? 34 : 20,
+    height: Platform.OS === 'android' ? 44 : 20,
   },
-  mainWindow: {
-    flex: 1,
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginBottom: 10,
   },
-  windowContent: {
-    flex: 1,
-    padding: 6,
+  backBtn: {
+    width: 34,
+    height: 34,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#000000',
   },
   scrollContent: {
-    padding: 6,
     paddingBottom: 40,
   },
-  avatarPanel: {
-    padding: 10,
-    marginBottom: 12,
+  avatarCard: {
+    marginBottom: 8,
   },
   avatarRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   avatarBezel: {
-    width: 96,
-    height: 96,
-    backgroundColor: '#fff',
-    ...RETRO_STYLES.borderSunken,
+    width: 90,
+    height: 90,
+    borderWidth: BRUTALIST_STYLES.borderWidth,
+    borderColor: '#000000',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
   },
   uploadOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(255,255,255,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatarMeta: {
+  metaInfo: {
     marginLeft: 16,
     flex: 1,
-    justifyContent: 'center',
   },
   usernameText: {
     fontSize: 14,
-    fontWeight: 'bold',
-    fontFamily: 'monospace',
-    color: '#000',
+    fontWeight: '900',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#000000',
   },
   emailText: {
     fontSize: 10,
-    fontFamily: 'monospace',
-    color: '#555',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#555555',
     marginTop: 2,
     marginBottom: 8,
   },
   cameraBtn: {
     alignSelf: 'flex-start',
     paddingVertical: 4,
-    paddingHorizontal: 8,
-    flexDirection: 'row',
+    paddingHorizontal: 12,
+    height: 28,
   },
   btnText: {
     fontSize: 9,
-    fontFamily: 'monospace',
+    fontFamily: BRUTALIST_STYLES.fontBold,
     fontWeight: 'bold',
+    color: '#000000',
   },
   sectionTitle: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    fontFamily: 'monospace',
-    color: '#000',
-    marginTop: 10,
-    marginBottom: 6,
+    fontSize: 11,
+    fontWeight: '900',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#000000',
+    marginTop: 14,
+    marginBottom: 8,
     paddingLeft: 4,
   },
-  formPanel: {
-    padding: 10,
+  formCard: {
     marginBottom: 12,
   },
   label: {
     fontSize: 10,
-    fontWeight: 'bold',
-    fontFamily: 'monospace',
-    color: '#000',
+    fontWeight: '900',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#000000',
     marginBottom: 4,
   },
-  infoPanel: {
-    padding: 10,
-    marginBottom: 14,
+  securityCard: {
+    marginBottom: 16,
   },
-  infoTitle: {
+  securityTitle: {
     fontSize: 11,
-    fontWeight: 'bold',
-    fontFamily: 'monospace',
-    color: '#000080',
+    fontWeight: '900',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#FFFFFF',
   },
-  infoSub: {
+  securitySub: {
     fontSize: 9,
-    fontFamily: 'monospace',
-    color: '#555',
-    marginTop: 4,
-    lineHeight: 12,
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#EEEEEE',
   },
   logoutBtn: {
     flexDirection: 'row',
-    backgroundColor: '#d4d0c8',
-    borderColor: '#800000',
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   logoutText: {
-    color: '#800000',
-    fontSize: 11,
+    color: '#FFFFFF',
+    fontSize: 12,
     fontWeight: 'bold',
-    fontFamily: 'monospace',
+    fontFamily: BRUTALIST_STYLES.fontBold,
   },
 });

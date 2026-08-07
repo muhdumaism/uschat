@@ -24,10 +24,14 @@ exports.config = {
         accessKeyId: process.env.S3_ACCESS_KEY_ID || '',
         secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
     },
-    livekit: {
-        apiKey: process.env.LIVEKIT_API_KEY || 'devkey',
-        apiSecret: process.env.LIVEKIT_API_SECRET || 'secretsecretsecretsecretsecretsecret',
-        wsUrl: process.env.LIVEKIT_WS_URL || 'ws://localhost:7880',
+    lavalink: {
+        host: process.env.LAVALINK_HOST || 'localhost',
+        port: parseInt(process.env.LAVALINK_PORT || '2333', 10),
+        password: process.env.LAVALINK_PASSWORD || 'youshallnotpass',
+    },
+    spotify: {
+        clientId: process.env.SPOTIFY_CLIENT_ID || '',
+        clientSecret: process.env.SPOTIFY_CLIENT_SECRET || '',
     },
     smtp: {
         host: process.env.SMTP_HOST || 'smtp.ethereal.email',
@@ -37,7 +41,14 @@ exports.config = {
         from: process.env.SMTP_FROM || 'USCHAT Security <noreply@uschat.app>',
     },
     corsOrigins: process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',') : ['*'],
+    apkDownloadUrl: process.env.APK_DOWNLOAD_URL || 'https://uschat.ruptyl.space/api/v1/app/download',
     firebase: {
         serviceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT || './firebase-service-account.json',
+    },
+    uploadLimits: {
+        image: parseInt(process.env.LIMIT_IMAGE || String(10 * 1024 * 1024), 10),
+        video: parseInt(process.env.LIMIT_VIDEO || String(100 * 1024 * 1024), 10),
+        voice: parseInt(process.env.LIMIT_VOICE || String(25 * 1024 * 1024), 10),
+        document: parseInt(process.env.LIMIT_DOCUMENT || String(50 * 1024 * 1024), 10),
     },
 };

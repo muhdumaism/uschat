@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Animated, Vibration } from 'react-native';
 import { Eye, Lock, CheckCheck, Reply } from 'lucide-react-native';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
-import { COLORS } from '../theme/colors';
+import { BRUTALIST_COLORS, BRUTALIST_STYLES } from '../theme/brutalistTheme';
 import { ChatMessage } from '../store/chatStore';
 import { VoiceMessageBubble } from './VoiceMessageBubble';
 import { MediaCacheService } from '../services/mediaCacheService';
@@ -33,7 +33,7 @@ const CachedImage: React.FC<{ uri: string; style: any; blurHash?: string | null 
         />
       );
     }
-    return <View style={[style, { backgroundColor: 'rgba(255, 255, 255, 0.05)' }]} />;
+    return <View style={[style, { backgroundColor: '#EEEEEE', borderWidth: 2, borderColor: '#000000' }]} />;
   }
 
   return <Image source={{ uri: sourceUri }} style={style} resizeMode="cover" />;
@@ -84,12 +84,18 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       <TouchableOpacity
         activeOpacity={0.8}
         onPress={() => onReplyPress && onReplyPress(message.replyTo.id)}
-        style={[styles.replyBubble, isMe ? styles.myReplyBubble : styles.peerReplyBubble]}
+        style={[
+          styles.replyBubble,
+          {
+            backgroundColor: isMe ? 'rgba(0,0,0,0.08)' : 'rgba(0,0,0,0.05)',
+            borderLeftWidth: 4,
+            borderLeftColor: '#000000',
+          }
+        ]}
       >
-        <View style={styles.replyBar} />
         <View style={styles.replyContent}>
           <Text style={styles.replySender}>
-            {message.replyTo.sender?.displayName || message.replyTo.sender?.username || 'User'}
+            {(message.replyTo.sender?.displayName || message.replyTo.sender?.username || 'User').toUpperCase()}
           </Text>
           <Text style={styles.replyText} numberOfLines={1}>
             {replyText}
@@ -134,28 +140,33 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     return (
       <View style={styles.replyActionContainer}>
         <Animated.View style={[styles.replyActionIcon, { transform: [{ scale }] }]}>
-          <Reply size={20} color={COLORS.primary} />
+          <Reply size={20} color="#000000" />
         </Animated.View>
       </View>
     );
   };
 
   const renderContent = () => {
+    const bubbleBg = isMe ? BRUTALIST_COLORS.yellow : '#FFFFFF';
+
     if (message.viewOnce && message.isViewed) {
       return (
         <View style={isMe ? styles.myContainer : styles.peerContainer}>
-          <TouchableOpacity
-            activeOpacity={0.9}
-            delayLongPress={180}
-            onLongPress={onLongPress}
-            style={[styles.bubble, isMe ? styles.myBubble : styles.peerBubble]}
-          >
-            <View style={styles.viewOnceBox}>
-              <Eye size={16} color={COLORS.textMuted} />
-              <Text style={styles.viewOnceOpenedText}>View once photo opened</Text>
-            </View>
-            <Text style={styles.timeText}>{time}</Text>
-          </TouchableOpacity>
+          <View style={styles.bubbleWrapper}>
+            <View style={styles.shadowLayer} />
+            <TouchableOpacity
+              activeOpacity={0.9}
+              delayLongPress={180}
+              onLongPress={onLongPress}
+              style={[styles.bubble, { backgroundColor: bubbleBg }]}
+            >
+              <View style={styles.viewOnceBox}>
+                <Eye size={16} color="#000000" />
+                <Text style={styles.viewOnceOpenedText}>VIEW ONCE PHOTO OPENED</Text>
+              </View>
+              <Text style={styles.timeText}>{time}</Text>
+            </TouchableOpacity>
+          </View>
           {renderReactions()}
         </View>
       );
@@ -164,28 +175,24 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     if (message.viewOnce && !message.isViewed) {
       return (
         <View style={isMe ? styles.myContainer : styles.peerContainer}>
-          <TouchableOpacity
-            activeOpacity={0.8}
-            delayLongPress={180}
-            onPress={isMe ? undefined : onOpenViewOnce}
-            onLongPress={onLongPress}
-            style={[styles.bubble, isMe ? styles.myBubble : styles.peerBubble]}
-          >
-            <View style={styles.viewOnceBox}>
-              {isMe ? (
-                <Eye size={18} color="rgba(255, 255, 255, 0.6)" />
-              ) : (
-                <Eye size={18} color={COLORS.primary} />
-              )}
-              <Text style={[
-                styles.viewOncePendingText,
-                isMe ? { color: 'rgba(255, 255, 255, 0.8)' } : null
-              ]}>
-                {isMe ? '1 View Once Photo' : '1 View Once Photo (Tap to view)'}
-              </Text>
-            </View>
-            <Text style={[styles.timeText, isMe ? styles.myTime : styles.peerTime]}>{time}</Text>
-          </TouchableOpacity>
+          <View style={styles.bubbleWrapper}>
+            <View style={styles.shadowLayer} />
+            <TouchableOpacity
+              activeOpacity={0.8}
+              delayLongPress={180}
+              onPress={isMe ? undefined : onOpenViewOnce}
+              onLongPress={onLongPress}
+              style={[styles.bubble, { backgroundColor: bubbleBg }]}
+            >
+              <View style={styles.viewOnceBox}>
+                <Eye size={18} color="#000000" />
+                <Text style={styles.viewOncePendingText}>
+                  {isMe ? 'VIEW ONCE PHOTO' : 'VIEW ONCE PHOTO (TAP TO VIEW)'}
+                </Text>
+              </View>
+              <Text style={styles.timeText}>{time}</Text>
+            </TouchableOpacity>
+          </View>
           {renderReactions()}
         </View>
       );
@@ -215,54 +222,57 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
     return (
       <View style={isMe ? styles.myContainer : styles.peerContainer}>
-        <TouchableOpacity
-          activeOpacity={0.95}
-          delayLongPress={180}
-          onLongPress={onLongPress}
-          style={[styles.bubble, isMe ? styles.myBubble : styles.peerBubble]}
-        >
-          {renderReplyPreview()}
-          {isVoice && voicePayload ? (
-            <VoiceMessageBubble
-              audioUrl={voicePayload.audioUrl}
-              duration={voicePayload.duration}
-              waveform={voicePayload.waveform}
-              isSender={isMe}
-              timestamp={time}
-              isViewed={message.isViewed}
-            />
-          ) : isImage ? (
-            <TouchableOpacity
-              activeOpacity={0.9}
-              delayLongPress={180}
-              onPress={() => onOpenImage && onOpenImage(imageUri)}
-              onLongPress={onLongPress}
-              style={styles.imageContainer}
-            >
-              <CachedImage
-                uri={message.attachments?.[0]?.thumbnailUrl || imageUri}
-                style={styles.attachedImage}
-                blurHash={message.attachments?.[0]?.blurHash}
+        <View style={styles.bubbleWrapper}>
+          <View style={styles.shadowLayer} />
+          <TouchableOpacity
+            activeOpacity={0.95}
+            delayLongPress={180}
+            onLongPress={onLongPress}
+            style={[styles.bubble, { backgroundColor: bubbleBg }]}
+          >
+            {renderReplyPreview()}
+            {isVoice && voicePayload ? (
+              <VoiceMessageBubble
+                audioUrl={voicePayload.audioUrl}
+                duration={voicePayload.duration}
+                waveform={voicePayload.waveform}
+                isSender={isMe}
+                timestamp={time}
+                isViewed={message.isViewed}
               />
-            </TouchableOpacity>
-          ) : (
-            <Text style={[styles.messageText, isMe ? styles.myText : styles.peerText]}>
-              {message.decryptedText ?? message.encryptedContent}
-            </Text>
-          )}
-
-          <View style={styles.footerRow}>
-            <Lock size={10} color={isMe ? 'rgba(255, 255, 255, 0.6)' : COLORS.textMuted} style={styles.lockIcon} />
-            <Text style={[styles.timeText, isMe ? styles.myTime : styles.peerTime]}>{time}</Text>
-            {isMe && (
-              <CheckCheck
-                size={12}
-                color={message.isViewed ? COLORS.primary : COLORS.textMuted}
-                style={styles.checkIcon}
-              />
+            ) : isImage ? (
+              <TouchableOpacity
+                activeOpacity={0.9}
+                delayLongPress={180}
+                onPress={() => onOpenImage && onOpenImage(imageUri)}
+                onLongPress={onLongPress}
+                style={styles.imageContainer}
+              >
+                <CachedImage
+                  uri={message.attachments?.[0]?.thumbnailUrl || imageUri}
+                  style={styles.attachedImage}
+                  blurHash={message.attachments?.[0]?.blurHash}
+                />
+              </TouchableOpacity>
+            ) : (
+              <Text style={styles.messageText}>
+                {message.decryptedText ?? message.encryptedContent}
+              </Text>
             )}
-          </View>
-        </TouchableOpacity>
+
+            <View style={styles.footerRow}>
+              <Lock size={10} color="#333333" style={{ marginRight: 4 }} />
+              <Text style={styles.timeText}>{time}</Text>
+              {isMe && (
+                <CheckCheck
+                  size={12}
+                  color={message.isViewed ? BRUTALIST_COLORS.pink : '#555555'}
+                  style={{ marginLeft: 4 }}
+                />
+              )}
+            </View>
+          </TouchableOpacity>
+        </View>
         {renderReactions()}
       </View>
     );
@@ -302,51 +312,56 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
     alignItems: 'flex-end',
     width: '100%',
-    marginVertical: 2,
+    marginVertical: 8,
+    paddingRight: 10,
   },
   peerContainer: {
     alignSelf: 'flex-start',
     alignItems: 'flex-start',
     width: '100%',
-    marginVertical: 2,
+    marginVertical: 8,
+    paddingLeft: 6,
+  },
+  bubbleWrapper: {
+    position: 'relative',
+    overflow: 'visible',
+  },
+  shadowLayer: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    right: -4,
+    bottom: -4,
+    backgroundColor: '#000000',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#000000',
   },
   bubble: {
-    maxWidth: '78%',
+    maxWidth: 280,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 20,
-  },
-  myBubble: {
-    alignSelf: 'flex-end',
-    backgroundColor: '#2A4B7C',
-    borderBottomRightRadius: 4,
-  },
-  peerBubble: {
-    alignSelf: 'flex-start',
-    backgroundColor: COLORS.card,
-    borderColor: COLORS.border,
-    borderWidth: 1,
-    borderBottomLeftRadius: 4,
+    borderRadius: 16,
+    borderWidth: 3,
+    borderColor: '#000000',
   },
   messageText: {
-    fontSize: 15,
-    lineHeight: 20,
-  },
-  myText: {
-    color: '#FFF',
-  },
-  peerText: {
-    color: COLORS.textPrimary,
+    fontSize: 14,
+    lineHeight: 18,
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#000000',
+    fontWeight: 'bold',
   },
   imageContainer: {
-    borderRadius: 14,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#000000',
     overflow: 'hidden',
     marginBottom: 4,
   },
   attachedImage: {
-    width: 220,
-    height: 180,
-    borderRadius: 14,
+    width: 200,
+    height: 160,
   },
   viewOnceBox: {
     flexDirection: 'row',
@@ -354,109 +369,86 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   viewOncePendingText: {
-    color: COLORS.primary,
-    fontWeight: '600',
-    fontSize: 14,
-    marginLeft: 8,
+    color: '#000000',
+    fontWeight: '900',
+    fontSize: 11,
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    marginLeft: 6,
   },
   viewOnceOpenedText: {
-    color: COLORS.textMuted,
-    fontStyle: 'italic',
-    fontSize: 13,
-    marginLeft: 8,
+    color: '#555555',
+    fontSize: 11,
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    marginLeft: 6,
   },
   footerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-end',
-    marginTop: 4,
-  },
-  lockIcon: {
-    marginRight: 4,
+    marginTop: 6,
   },
   timeText: {
-    fontSize: 11,
-  },
-  myTime: {
-    color: 'rgba(255, 255, 255, 0.7)',
-  },
-  peerTime: {
-    color: COLORS.textMuted,
-  },
-  checkIcon: {
-    marginLeft: 4,
+    fontSize: 9,
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#333333',
+    fontWeight: 'bold',
   },
   reactionsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: -6,
+    marginTop: 2,
     zIndex: 10,
   },
   myReactions: {
-    marginRight: 12,
+    marginRight: 10,
     alignSelf: 'flex-end',
   },
   peerReactions: {
-    marginLeft: 12,
+    marginLeft: 10,
     alignSelf: 'flex-start',
   },
   reactionBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: COLORS.card,
-    borderColor: COLORS.border,
-    borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderColor: '#000000',
+    borderWidth: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
     marginRight: 4,
     marginBottom: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
   },
   reactionEmoji: {
-    fontSize: 13,
+    fontSize: 11,
   },
   reactionCount: {
-    color: COLORS.textPrimary,
-    fontSize: 10,
-    fontWeight: 'bold',
-    marginLeft: 4,
+    color: '#000000',
+    fontSize: 9,
+    fontWeight: '900',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    marginLeft: 2,
   },
   replyBubble: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
     marginBottom: 8,
-    overflow: 'hidden',
-  },
-  myReplyBubble: {
-    backgroundColor: 'rgba(0, 0, 0, 0.15)',
-  },
-  peerReplyBubble: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  replyBar: {
-    width: 3.5,
-    backgroundColor: COLORS.primary,
   },
   replyContent: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
     flex: 1,
   },
   replySender: {
-    fontWeight: '700',
-    fontSize: 12,
-    color: COLORS.primary,
-    marginBottom: 2,
+    fontWeight: '900',
+    fontSize: 10,
+    color: '#000000',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    marginBottom: 1,
   },
   replyText: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
+    fontSize: 11,
+    color: '#333333',
+    fontFamily: BRUTALIST_STYLES.fontBold,
   },
   replyActionContainer: {
     width: 60,
@@ -464,10 +456,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   replyActionIcon: {
-    backgroundColor: 'rgba(59, 130, 246, 0.15)',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    backgroundColor: BRUTALIST_COLORS.yellow,
+    borderWidth: 2,
+    borderColor: '#000000',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
   },

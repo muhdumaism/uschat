@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Platform, Alert, Switch, NativeModules } from 'react-native';
-import { Shield, Lock, Smartphone, LogOut, Settings, HelpCircle, CheckSquare, Square } from 'lucide-react-native';
-import { RetroWindow } from '../../components/RetroWindow';
-import { RetroButton } from '../../components/RetroButton';
-import { RetroPanel } from '../../components/RetroPanel';
-import { RETRO_COLORS, RETRO_STYLES } from '../../theme/retroTheme';
+import { Shield, Lock, Smartphone, LogOut, ArrowLeft } from 'lucide-react-native';
+import { BRUTALIST_COLORS, BRUTALIST_STYLES } from '../../theme/brutalistTheme';
+import { BrutalistCard } from '../../components/BrutalistCard';
+import { BrutalistButton } from '../../components/BrutalistButton';
 import { useAuthStore } from '../../store/authStore';
 import { CURRENT_VERSION_NAME } from '../../services/updateService';
 
@@ -56,123 +55,125 @@ export const SettingsScreen: React.FC<any> = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
       <View style={styles.statusBarSpacer} />
 
-      <RetroWindow
-        title="CONTROL_PANEL.EXE"
-        onClose={() => navigation.goBack()}
-        contentStyle={styles.windowContent}
-        style={styles.mainWindow}
-      >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          
-          {/* Security Panel */}
-          <Text style={styles.sectionTitle}>SECURITY & PRIVACY</Text>
-          <RetroPanel raised style={styles.sectionPanel}>
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => Alert.alert('Security Number', 'Signal E2EE Session Fingerprint Verified.')}
-              style={styles.settingItem}
-            >
-              <Shield size={16} color="#000" style={{ marginRight: 10 }} />
-              <View style={styles.textMeta}>
-                <Text style={styles.itemTitle}>END-TO-END ENCRYPTION</Text>
-                <Text style={styles.itemSub}>Signal keys and local session validation.</Text>
-              </View>
-            </TouchableOpacity>
+      {/* Header Bar */}
+      <View style={styles.header}>
+        <BrutalistButton onPress={() => navigation.goBack()} style={styles.backBtn} accentColor={BRUTALIST_COLORS.yellow}>
+          <ArrowLeft size={18} color="#000000" />
+        </BrutalistButton>
+        <Text style={styles.headerTitle}>SETTINGS</Text>
+        <View style={{ width: 36 }} />
+      </View>
 
-            <View style={styles.divider} />
-
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => Alert.alert('Disappearing Messages', 'Default timer set to Off.')}
-              style={styles.settingItem}
-            >
-              <Lock size={16} color="#000" style={{ marginRight: 10 }} />
-              <View style={styles.textMeta}>
-                <Text style={styles.itemTitle}>DISAPPEARING MESSAGES</Text>
-                <Text style={styles.itemSub}>Configure ephemeral chat expire timers.</Text>
-              </View>
-            </TouchableOpacity>
-          </RetroPanel>
-
-          {/* Notifications Panel */}
-          <Text style={styles.sectionTitle}>NOTIFICATIONS</Text>
-          <RetroPanel raised style={styles.sectionPanel}>
-            <View style={styles.settingItemRow}>
-              <View style={styles.textMeta}>
-                <Text style={styles.itemTitle}>NOTIFICATION SOUNDS</Text>
-                <Text style={styles.itemSub}>Play sounds for incoming packets.</Text>
-              </View>
-              <Switch
-                value={soundEnabled}
-                onValueChange={toggleSound}
-                trackColor={{ false: '#808080', true: '#000080' }}
-                thumbColor={soundEnabled ? '#ffffff' : '#d4d0c8'}
-              />
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.settingItemRow}>
-              <View style={styles.textMeta}>
-                <Text style={styles.itemTitle}>VIBRATE PREFERENCE</Text>
-                <Text style={styles.itemSub}>Vibrate device on receipt.</Text>
-              </View>
-              <Switch
-                value={vibrationEnabled}
-                onValueChange={toggleVibration}
-                trackColor={{ false: '#808080', true: '#000080' }}
-                thumbColor={vibrationEnabled ? '#ffffff' : '#d4d0c8'}
-              />
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.settingItemRow}>
-              <View style={styles.textMeta}>
-                <Text style={styles.itemTitle}>CUSTOM WAV CHIME</Text>
-                <Text style={styles.itemSub}>Play classic retro notify sound.</Text>
-              </View>
-              <Switch
-                value={customSoundEnabled}
-                onValueChange={toggleCustomSound}
-                trackColor={{ false: '#808080', true: '#000080' }}
-                thumbColor={customSoundEnabled ? '#ffffff' : '#d4d0c8'}
-                disabled={!soundEnabled}
-              />
-            </View>
-          </RetroPanel>
-
-          {/* System Info Panel */}
-          <Text style={styles.sectionTitle}>SYSTEM INFO</Text>
-          <RetroPanel raised style={styles.sectionPanel}>
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => Alert.alert(`USCHAT v${CURRENT_VERSION_NAME}`, 'Connected to https://uschat.ruptyl.space')}
-              style={styles.settingItem}
-            >
-              <Smartphone size={16} color="#000" style={{ marginRight: 10 }} />
-              <View style={styles.textMeta}>
-                <Text style={styles.itemTitle}>ABOUT CLIENT</Text>
-                <Text style={styles.itemSub}>USCHAT build version {CURRENT_VERSION_NAME}.</Text>
-              </View>
-            </TouchableOpacity>
-          </RetroPanel>
-
-          {/* Log Out */}
-          <RetroButton
-            onPress={logout}
-            style={styles.logoutBtn}
-            textStyle={{ color: '#800000' }}
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        
+        {/* Security Section */}
+        <Text style={styles.sectionTitle}>SECURITY & PRIVACY</Text>
+        <BrutalistCard accentColor={BRUTALIST_COLORS.cardBg} padding={12} style={styles.sectionCard}>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => Alert.alert('Security Fingerprint', 'Signal E2EE Handshake Verified.')}
+            style={styles.settingItem}
           >
-            <LogOut size={14} color="#800000" style={{ marginRight: 8 }} />
-            <Text style={styles.logoutText}>DISCONNECT SESSION (LOG OUT)</Text>
-          </RetroButton>
+            <Shield size={20} color="#000000" style={{ marginRight: 12 }} />
+            <View style={styles.textMeta}>
+              <Text style={styles.itemTitle}>END-TO-END ENCRYPTION</Text>
+              <Text style={styles.itemSub}>Local cryptographic Signal protocol state.</Text>
+            </View>
+          </TouchableOpacity>
 
-        </ScrollView>
-      </RetroWindow>
+          <View style={styles.divider} />
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => Alert.alert('Disappearing Messages', 'Timer is set to Off.')}
+            style={styles.settingItem}
+          >
+            <Lock size={20} color="#000000" style={{ marginRight: 12 }} />
+            <View style={styles.textMeta}>
+              <Text style={styles.itemTitle}>DISAPPEARING MESSAGES</Text>
+              <Text style={styles.itemSub}>Configure auto-expire times on DMs.</Text>
+            </View>
+          </TouchableOpacity>
+        </BrutalistCard>
+
+        {/* Notifications Section */}
+        <Text style={styles.sectionTitle}>NOTIFICATIONS</Text>
+        <BrutalistCard accentColor={BRUTALIST_COLORS.cardBg} padding={12} style={styles.sectionCard}>
+          <View style={styles.settingItemRow}>
+            <View style={styles.textMeta}>
+              <Text style={styles.itemTitle}>NOTIFICATION SOUNDS</Text>
+              <Text style={styles.itemSub}>Play sounds on incoming packets.</Text>
+            </View>
+            <Switch
+              value={soundEnabled}
+              onValueChange={toggleSound}
+              trackColor={{ false: '#CCCCCC', true: '#000000' }}
+              thumbColor={soundEnabled ? BRUTALIST_COLORS.yellow : '#FFFFFF'}
+            />
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.settingItemRow}>
+            <View style={styles.textMeta}>
+              <Text style={styles.itemTitle}>VIBE PREFERENCE</Text>
+              <Text style={styles.itemSub}>Vibrate device on notify triggers.</Text>
+            </View>
+            <Switch
+              value={vibrationEnabled}
+              onValueChange={toggleVibration}
+              trackColor={{ false: '#CCCCCC', true: '#000000' }}
+              thumbColor={vibrationEnabled ? BRUTALIST_COLORS.yellow : '#FFFFFF'}
+            />
+          </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.settingItemRow}>
+            <View style={styles.textMeta}>
+              <Text style={styles.itemTitle}>CUSTOM BRUTALIST WAV</Text>
+              <Text style={styles.itemSub}>Toggle custom notification chime sound.</Text>
+            </View>
+            <Switch
+              value={customSoundEnabled}
+              onValueChange={toggleCustomSound}
+              trackColor={{ false: '#CCCCCC', true: '#000000' }}
+              thumbColor={customSoundEnabled ? BRUTALIST_COLORS.yellow : '#FFFFFF'}
+              disabled={!soundEnabled}
+            />
+          </View>
+        </BrutalistCard>
+
+        {/* App Info Section */}
+        <Text style={styles.sectionTitle}>CLIENT APP INFO</Text>
+        <BrutalistCard accentColor={BRUTALIST_COLORS.cardBg} padding={12} style={styles.sectionCard}>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => Alert.alert(`USCHAT v${CURRENT_VERSION_NAME}`, 'Connected to https://uschat.ruptyl.space')}
+            style={styles.settingItem}
+          >
+            <Smartphone size={20} color="#000000" style={{ marginRight: 12 }} />
+            <View style={styles.textMeta}>
+              <Text style={styles.itemTitle}>ABOUT CLIENT</Text>
+              <Text style={styles.itemSub}>USCHAT build version {CURRENT_VERSION_NAME} (Brutalist Remake).</Text>
+            </View>
+          </TouchableOpacity>
+        </BrutalistCard>
+
+        {/* Log Out */}
+        <BrutalistButton
+          onPress={logout}
+          style={styles.logoutBtn}
+          accentColor={BRUTALIST_COLORS.red}
+        >
+          <LogOut size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
+          <Text style={styles.logoutText}>DISCONNECT ACTIVE SESSION</Text>
+        </BrutalistButton>
+
+      </ScrollView>
     </View>
   );
 };
@@ -180,80 +181,90 @@ export const SettingsScreen: React.FC<any> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: RETRO_COLORS.desktop,
-    padding: 6,
+    backgroundColor: BRUTALIST_COLORS.background,
+    paddingHorizontal: 16,
   },
   statusBarSpacer: {
-    height: Platform.OS === 'android' ? 34 : 20,
+    height: Platform.OS === 'android' ? 44 : 20,
   },
-  mainWindow: {
-    flex: 1,
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginBottom: 16,
   },
-  windowContent: {
-    flex: 1,
-    padding: 6,
+  backBtn: {
+    width: 34,
+    height: 34,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#000000',
   },
   scrollContent: {
-    padding: 6,
-    paddingBottom: 40,
+    paddingBottom: 60,
   },
   sectionTitle: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    fontFamily: 'monospace',
-    color: '#000',
-    marginTop: 10,
-    marginBottom: 6,
+    fontSize: 11,
+    fontWeight: '900',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#000000',
+    marginTop: 22,
+    marginBottom: 12,
     paddingLeft: 4,
   },
-  sectionPanel: {
-    padding: 10,
-    marginBottom: 12,
+  sectionCard: {
+    marginBottom: 16,
   },
   settingItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 4,
+    paddingVertical: 10,
   },
   settingItemRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 4,
+    paddingVertical: 10,
   },
   textMeta: {
     flex: 1,
-    marginLeft: 6,
   },
   itemTitle: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    fontFamily: 'monospace',
-    color: '#000',
+    fontSize: 12,
+    fontWeight: '900',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#000000',
   },
   itemSub: {
-    fontSize: 9,
-    fontFamily: 'monospace',
-    color: '#555',
+    fontSize: 10,
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    color: '#555555',
     marginTop: 2,
   },
   divider: {
     height: 2,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: RETRO_COLORS.panelDark,
-    marginVertical: 10,
+    backgroundColor: '#000000',
+    marginVertical: 16,
   },
   logoutBtn: {
     flexDirection: 'row',
-    marginTop: 14,
-    backgroundColor: '#d4d0c8',
-    borderColor: '#800000',
+    marginTop: 24,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   logoutText: {
-    color: '#800000',
-    fontSize: 11,
+    color: '#FFFFFF',
+    fontSize: 12,
     fontWeight: 'bold',
-    fontFamily: 'monospace',
+    fontFamily: BRUTALIST_STYLES.fontBold,
   },
 });

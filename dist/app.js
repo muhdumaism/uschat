@@ -23,10 +23,11 @@ const keys_routes_1 = require("./routes/keys.routes");
 const chat_routes_1 = require("./routes/chat.routes");
 const message_routes_1 = require("./routes/message.routes");
 const media_routes_1 = require("./routes/media.routes");
-const call_routes_1 = require("./routes/call.routes");
 const admin_routes_1 = require("./routes/admin.routes");
 const notification_routes_1 = require("./routes/notification.routes");
 const app_routes_1 = require("./routes/app.routes");
+const request_routes_1 = require("./routes/request.routes");
+const music_routes_1 = require("./routes/music.routes");
 const ws_handler_1 = require("./websocket/ws.handler");
 function buildApp() {
     const app = (0, fastify_1.default)({ logger: true });
@@ -61,10 +62,11 @@ function buildApp() {
     app.register(chat_routes_1.chatRoutes, { prefix: '/api/v1/chats' });
     app.register(message_routes_1.messageRoutes, { prefix: '/api/v1/messages' });
     app.register(media_routes_1.mediaRoutes, { prefix: '/api/v1/media' });
-    app.register(call_routes_1.callRoutes, { prefix: '/api/v1/calls' });
     app.register(admin_routes_1.adminRoutes, { prefix: '/api/v1/admin' });
     app.register(notification_routes_1.notificationRoutes, { prefix: '/api/v1/notifications' });
     app.register(app_routes_1.appRoutes, { prefix: '/api/v1/app' });
+    app.register(request_routes_1.requestRoutes, { prefix: '/api/v1/requests' });
+    app.register(music_routes_1.musicRoutes, { prefix: '/api/v1/music' });
     app.after(async () => {
         (0, ws_handler_1.registerWebSocketRoutes)(app);
         // Seed @uschat_bot system user

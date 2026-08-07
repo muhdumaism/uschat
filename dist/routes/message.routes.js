@@ -20,6 +20,11 @@ const sendMessageSchema = zod_1.z.object({
         fileSizeBytes: zod_1.z.number(),
         encryptedKey: zod_1.z.string(),
         initializationVector: zod_1.z.string(),
+        width: zod_1.z.number().int().optional().nullable(),
+        height: zod_1.z.number().int().optional().nullable(),
+        duration: zod_1.z.number().optional().nullable(),
+        thumbnailUrl: zod_1.z.string().optional().nullable(),
+        blurHash: zod_1.z.string().optional().nullable(),
     })).optional(),
 });
 async function messageRoutes(fastify) {
@@ -114,7 +119,7 @@ async function messageRoutes(fastify) {
         ws_handler_1.WebSocketManager.broadcastToChat(body.chatId, request.user.id, 'NEW_MESSAGE', message);
         // Send FCM push notification to offline recipients
         const senderName = message.sender?.displayName || message.sender?.username || 'Someone';
-        notification_service_1.NotificationService.sendMessageNotification(body.chatId, request.user.id, senderName, body.encryptedContent, body.messageType, message.sender?.avatarUrl);
+        notification_service_1.NotificationService.sendMessageNotification(body.chatId, message.id, request.user.id, senderName, body.encryptedContent, body.messageType, message.sender?.avatarUrl);
         // Auto Bot Response if sending to @uschat_bot
         const chatMembers = await client_1.prisma.chatMember.findMany({
             where: { chatId: body.chatId },

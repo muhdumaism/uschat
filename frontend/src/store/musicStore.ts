@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_BASE_URL } from '../api/client';
+import { apiClient, API_BASE_URL } from '../api/client';
 
 export interface Track {
   title: string;
@@ -22,6 +22,7 @@ interface MusicState {
   isLooping: boolean;
   isShuffled: boolean;
   originalQueue: Track[];
+  likedSongs: Track[];
 
   playTrack: (track: Track, newQueue?: Track[]) => Promise<void>;
   pauseTrack: () => Promise<void>;
@@ -31,9 +32,16 @@ interface MusicState {
   nextTrack: () => Promise<void>;
   prevTrack: () => Promise<void>;
   seek: (millis: number) => Promise<void>;
+  seekTrack: (millis: number) => Promise<void>;
   toggleLoop: () => void;
   toggleShuffle: () => void;
   updateStatus: (status: any) => void;
+  
+  addToQueue: (track: Track) => void;
+  removeFromQueue: (trackUri: string) => void;
+  likeTrack: (track: Track) => Promise<void>;
+  unlikeTrack: (trackUri: string) => Promise<void>;
+  fetchLikedSongs: () => Promise<void>;
 }
 
 export const useMusicStore = create<MusicState>((set, get) => {
@@ -49,7 +57,6 @@ export const useMusicStore = create<MusicState>((set, get) => {
       });
 
       if (status.didJustFinish) {
-        // Auto play next track
         get().nextTrack();
       }
     }
@@ -66,39 +73,34 @@ export const useMusicStore = create<MusicState>((set, get) => {
     isLooping: false,
     isShuffled: false,
     originalQueue: [],
+    likedSongs: [],
 
     playTrack: async (track: Track, newQueue?: Track[]) => {
       const state = get();
       
-      // Stop and unload existing sound
       if (state.sound) {
         try {
+          isUpdating = true;
           await state.sound.unloadAsync();
-        } catch (e) {}
-      }
-
-      // Configure queue
-      let activeQueue = state.queue;
-      let activeIndex = state.queueIndex;
-
-      if (newQueue) {
-        activeQueue = newQueue;
-        activeIndex = newQueue.findIndex((t) => t.trackUri === track.trackUri);
-        set({ queue: newQueue, originalQueue: newQueue, queueIndex: activeIndex });
-      } else {
-        // Add to queue if not present
-        const idx = activeQueue.findIndex((t) => t.trackUri === track.trackUri);
-        if (idx === -1) {
-          activeQueue = [...activeQueue, track];
-          activeIndex = activeQueue.length - 1;
-          set({ queue: activeQueue, originalQueue: activeQueue, queueIndex: activeIndex });
-        } else {
-          activeIndex = idx;
-          set({ queueIndex: activeIndex });
+        } catch (e) {
+          console.warn('Sound unload error:', e);
+        } finally {
+          isUpdating = false;
         }
       }
 
-      set({ currentTrack: track, isPlaying: true, position: 0, duration: track.duration * 1000 });
+      const activeQueue = newQueue || state.queue;
+      const index = activeQueue.findIndex((t) => t.trackUri === track.trackUri);
+      
+      set({
+        currentTrack: track,
+        isPlaying: true,
+        position: 0,
+        duration: track.duration * 1000,
+        queue: activeQueue,
+        queueIndex: index !== -1 ? index : 0,
+        originalQueue: newQueue ? [...newQueue] : state.originalQueue
+      });
 
       try {
         const token = await AsyncStorage.getItem('@uschat/token');
@@ -127,8 +129,8 @@ export const useMusicStore = create<MusicState>((set, get) => {
 
         set({ sound });
       } catch (err) {
-        console.error('[MusicStore] Play track failed:', err);
-        set({ isPlaying: false, sound: null });
+        console.error('Audio play error:', err);
+        set({ isPlaying: false });
       }
     },
 
@@ -136,13 +138,9 @@ export const useMusicStore = create<MusicState>((set, get) => {
       const state = get();
       if (state.sound && state.isPlaying) {
         try {
-          isUpdating = true;
           await state.sound.pauseAsync();
           set({ isPlaying: false });
-        } catch (e) {
-        } finally {
-          isUpdating = false;
-        }
+        } catch (e) {}
       }
     },
 
@@ -150,13 +148,9 @@ export const useMusicStore = create<MusicState>((set, get) => {
       const state = get();
       if (state.sound && !state.isPlaying) {
         try {
-          isUpdating = true;
           await state.sound.playAsync();
           set({ isPlaying: true });
-        } catch (e) {
-        } finally {
-          isUpdating = false;
-        }
+        } catch (e) {}
       }
     },
 
@@ -164,20 +158,20 @@ export const useMusicStore = create<MusicState>((set, get) => {
       const state = get();
       if (state.sound) {
         try {
-          await state.sound.unloadAsync();
+          await state.sound.stopAsync();
+          set({ isPlaying: false, position: 0 });
         } catch (e) {}
       }
-      set({ currentTrack: null, isPlaying: false, sound: null, position: 0, duration: 0 });
     },
 
     setQueue: (tracks: Track[]) => {
-      set({ queue: tracks, originalQueue: tracks, queueIndex: -1 });
+      set({ queue: tracks, originalQueue: [...tracks] });
     },
 
     nextTrack: async () => {
       const state = get();
       if (state.queue.length === 0) return;
-
+      
       let nextIdx = state.queueIndex + 1;
       if (nextIdx >= state.queue.length) {
         nextIdx = 0; // Wrap around
@@ -196,7 +190,7 @@ export const useMusicStore = create<MusicState>((set, get) => {
 
       let prevIdx = state.queueIndex - 1;
       if (prevIdx < 0) {
-        prevIdx = state.queue.length - 1; // Wrap around
+        prevIdx = state.queue.length - 1;
       }
 
       const prevTrack = state.queue[prevIdx];
@@ -216,6 +210,10 @@ export const useMusicStore = create<MusicState>((set, get) => {
       }
     },
 
+    seekTrack: async (millis: number) => {
+      await get().seek(millis);
+    },
+
     toggleLoop: () => {
       const state = get();
       const nextLoop = !state.isLooping;
@@ -231,9 +229,7 @@ export const useMusicStore = create<MusicState>((set, get) => {
       set({ isShuffled: nextShuffle });
 
       if (nextShuffle) {
-        // Shuffle queue
         const shuffled = [...state.queue].sort(() => Math.random() - 0.5);
-        // Move current track to start of shuffled queue
         if (state.currentTrack) {
           const idx = shuffled.findIndex((t) => t.trackUri === state.currentTrack?.trackUri);
           if (idx !== -1) {
@@ -243,7 +239,6 @@ export const useMusicStore = create<MusicState>((set, get) => {
         }
         set({ queue: shuffled, queueIndex: 0 });
       } else {
-        // Reset to original queue order
         const origIdx = state.originalQueue.findIndex((t) => t.trackUri === state.currentTrack?.trackUri);
         set({ queue: state.originalQueue, queueIndex: origIdx !== -1 ? origIdx : 0 });
       }
@@ -251,6 +246,54 @@ export const useMusicStore = create<MusicState>((set, get) => {
 
     updateStatus: (status: any) => {
       onPlaybackStatusUpdate(status);
+    },
+
+    addToQueue: (track: Track) => {
+      const state = get();
+      if (!state.queue.some(t => t.trackUri === track.trackUri)) {
+        set({ queue: [...state.queue, track], originalQueue: [...state.originalQueue, track] });
+      }
+    },
+
+    removeFromQueue: (trackUri: string) => {
+      const state = get();
+      set({
+        queue: state.queue.filter(t => t.trackUri !== trackUri),
+        originalQueue: state.originalQueue.filter(t => t.trackUri !== trackUri),
+      });
+    },
+
+    likeTrack: async (track: Track) => {
+      try {
+        await apiClient.post('/music/like', {
+          title: track.title,
+          artist: track.artist,
+          duration: track.duration,
+          coverUrl: track.coverUrl,
+          trackUri: track.trackUri
+        });
+        set({ likedSongs: [...get().likedSongs, track] });
+      } catch (e) {
+        console.warn('Failed to like song:', e);
+      }
+    },
+
+    unlikeTrack: async (trackUri: string) => {
+      try {
+        await apiClient.delete(`/music/unlike?trackUri=${encodeURIComponent(trackUri)}`);
+        set({ likedSongs: get().likedSongs.filter(t => t.trackUri !== trackUri) });
+      } catch (e) {
+        console.warn('Failed to unlike song:', e);
+      }
+    },
+
+    fetchLikedSongs: async () => {
+      try {
+        const res = await apiClient.get('/music/liked');
+        set({ likedSongs: res.data || [] });
+      } catch (e) {
+        console.warn('Failed to fetch liked songs:', e);
+      }
     },
   };
 });
