@@ -9,6 +9,7 @@ export interface Track {
   duration: number; // seconds
   trackUri: string; // youtube/spotify link
   coverUrl: string | null;
+  album?: string | null;
 }
 
 interface MusicState {

@@ -48,8 +48,12 @@ export const MusicScreen: React.FC<any> = ({ navigation }) => {
   const [playlists, setPlaylists] = useState<any[]>([]);
   const [loadingPlaylists, setLoadingPlaylists] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
-  const [spotifyUrl, setSpotifyUrl] = useState('');
-  const [importingSpotify, setImportingSpotify] = useState(false);
+  const [selectedPlaylist, setSelectedPlaylist] = useState<any>(null);
+
+  // Playlist detail track search state
+  const [playlistSearchQuery, setPlaylistSearchQuery] = useState('');
+  const [playlistSearchResults, setPlaylistSearchResults] = useState<Track[]>([]);
+  const [playlistSearching, setPlaylistSearching] = useState(false);
 
   const {
     currentTrack,
@@ -117,18 +121,54 @@ export const MusicScreen: React.FC<any> = ({ navigation }) => {
     }
   };
 
-  const handleSpotifyImport = async () => {
-    if (!spotifyUrl.trim()) return;
+  const loadPlaylistDetails = async (id: string) => {
     try {
-      setImportingSpotify(true);
-      const res = await apiClient.post('/music/spotify-import', { url: spotifyUrl });
-      setSpotifyUrl('');
-      Alert.alert('IMPORT INITIATED', `${res.data?.message?.toUpperCase() || 'METADATA RESOLVED.'}`);
-      loadPlaylists();
-    } catch (e: any) {
-      Alert.alert('IMPORT FAILED', e.response?.data?.message?.toUpperCase() || 'UNABLE TO CONVERT PLAYLIST.');
+      const res = await apiClient.get(`/music/playlists/${id}`);
+      setSelectedPlaylist(res.data);
+    } catch (e) {
+      console.warn('Failed to load playlist details:', e);
+    }
+  };
+
+  const handlePlaylistSearch = async () => {
+    if (!playlistSearchQuery.trim()) return;
+    try {
+      setPlaylistSearching(true);
+      const res = await apiClient.get(`/music/search?q=${encodeURIComponent(playlistSearchQuery)}`);
+      setPlaylistSearchResults(res.data || []);
+    } catch (e) {
+      Alert.alert('ERROR', 'FAILED TO QUERY AUDIO CATALOG.');
     } finally {
-      setImportingSpotify(false);
+      setPlaylistSearching(false);
+    }
+  };
+
+  const handleAddTrackToPlaylist = async (track: Track) => {
+    if (!selectedPlaylist) return;
+    try {
+      await apiClient.post(`/music/playlists/${selectedPlaylist.id}/tracks`, {
+        title: track.title,
+        artist: track.artist,
+        album: track.album || null,
+        duration: track.duration,
+        coverUrl: track.coverUrl,
+        trackUri: track.trackUri,
+      });
+      Alert.alert('SUCCESS', 'TRACK ADDED TO PLAYLIST.');
+      loadPlaylistDetails(selectedPlaylist.id);
+    } catch (e) {
+      Alert.alert('ERROR', 'FAILED TO ADD TRACK.');
+    }
+  };
+
+  const handleRemoveTrackFromPlaylist = async (trackId: string) => {
+    if (!selectedPlaylist) return;
+    try {
+      await apiClient.delete(`/music/playlists/${selectedPlaylist.id}/tracks/${trackId}`);
+      Alert.alert('SUCCESS', 'TRACK REMOVED FROM PLAYLIST.');
+      loadPlaylistDetails(selectedPlaylist.id);
+    } catch (e) {
+      Alert.alert('ERROR', 'FAILED TO REMOVE TRACK.');
     }
   };
 
@@ -268,79 +308,176 @@ export const MusicScreen: React.FC<any> = ({ navigation }) => {
         )}
 
         {activeTab === 'playlists' && (
-          <ScrollView contentContainerStyle={styles.scrollContent}>
-            {/* Create Playlist */}
-            <BrutalistCard accentColor={colors.cardBg} padding={12} style={styles.metaCard}>
-              <Text style={[styles.label, { color: colors.textPrimary }]}>NEW PLAYLIST CONTAINER</Text>
-              <View style={styles.row}>
-                <BrutalistTextInput
-                  placeholder="PLAYLIST NAME..."
-                  placeholderTextColor={isDarkMode ? '#666666' : '#888888'}
-                  value={newPlaylistName}
-                  onChangeText={setNewPlaylistName}
-                  containerStyle={{ flex: 1, marginRight: 8 }}
-                />
+          selectedPlaylist ? (
+            <View style={{ flex: 1 }}>
+              {/* Header inside details */}
+              <View style={[styles.searchRow, { alignItems: 'center' }]}>
                 <BrutalistButton
-                  onPress={handleCreatePlaylist}
-                  title="CREATE"
+                  onPress={() => {
+                    setSelectedPlaylist(null);
+                    setPlaylistSearchQuery('');
+                    setPlaylistSearchResults([]);
+                    loadPlaylists();
+                  }}
                   accentColor={colors.yellow}
-                />
+                  style={styles.backBtn}
+                >
+                  <ArrowLeft size={16} color={isDarkMode ? '#FFFFFF' : '#000000'} />
+                </BrutalistButton>
+                <Text style={[styles.playlistDetailTitle, { color: colors.textPrimary }]} numberOfLines={1}>
+                  {selectedPlaylist.name.toUpperCase()}
+                </Text>
               </View>
-            </BrutalistCard>
 
-            {/* Spotify Importer */}
-            <BrutalistCard accentColor={colors.cardBg} padding={12} style={styles.metaCard}>
-              <Text style={[styles.label, { color: colors.textPrimary }]}>IMPORT SPOTIFY PLAYLIST URL</Text>
-              <View style={styles.row}>
-                <BrutalistTextInput
-                  placeholder="SPOTIFY URL..."
-                  placeholderTextColor={isDarkMode ? '#666666' : '#888888'}
-                  value={spotifyUrl}
-                  onChangeText={setSpotifyUrl}
-                  containerStyle={{ flex: 1, marginRight: 8 }}
-                />
-                <BrutalistButton
-                  onPress={handleSpotifyImport}
-                  title={importingSpotify ? "IMPORTING..." : "IMPORT"}
-                  accentColor={colors.green}
-                  disabled={importingSpotify}
-                />
-              </View>
-            </BrutalistCard>
-
-            {/* Playlist list */}
-            {loadingPlaylists ? (
-              <ActivityIndicator color={colors.textPrimary} />
-            ) : (
-              playlists.map((pl) => (
-                <BrutalistCard key={pl.id} accentColor={colors.cardBg} padding={12} style={styles.metaCard}>
-                  <View style={styles.row}>
-                    <ListMusic size={20} color={colors.textPrimary} style={{ marginRight: 8 }} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.playlistName, { color: colors.textPrimary }]}>{pl.name.toUpperCase()}</Text>
-                      <Text style={[styles.playlistTracks, { color: colors.textSecondary }]}>
-                        {pl.tracks?.length || 0} TRACKS RESOLVED
-                      </Text>
+              <FlatList
+                data={selectedPlaylist.tracks || []}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={styles.listContent}
+                renderItem={({ item }) => {
+                  const isCurrent = currentTrack?.trackUri === item.trackUri;
+                  return (
+                    <BrutalistCard accentColor="#FFFFFF" padding={10} style={styles.trackCard}>
+                      <View style={styles.trackRow}>
+                        <Music size={16} color="#000" style={{ marginRight: 8 }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.trackTitle, isCurrent && { color: BRUTALIST_COLORS.pink }]} numberOfLines={1}>
+                            {item.title.toUpperCase()}
+                          </Text>
+                          <Text style={styles.trackArtist} numberOfLines={1}>
+                            {item.artist.toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <BrutalistButton
+                            onPress={() => handleRemoveTrackFromPlaylist(item.id)}
+                            accentColor={colors.red}
+                            style={{ width: 28, height: 28, paddingHorizontal: 0, paddingVertical: 0 }}
+                          >
+                            <Trash2 size={12} color="#FFFFFF" />
+                          </BrutalistButton>
+                          <BrutalistButton
+                            onPress={() => playTrack(item, selectedPlaylist.tracks)}
+                            style={styles.trackPlayBtn}
+                            accentColor={isCurrent ? BRUTALIST_COLORS.pink : BRUTALIST_COLORS.yellow}
+                            title={isCurrent && isPlaying ? "⏸" : "▶"}
+                          />
+                        </View>
+                      </View>
+                    </BrutalistCard>
+                  );
+                }}
+                ListHeaderComponent={
+                  <View style={{ marginBottom: 16 }}>
+                    <Text style={[styles.label, { color: colors.textPrimary }]}>ADD SONGS TO PLAYLIST</Text>
+                    <View style={styles.searchRow}>
+                      <BrutalistTextInput
+                        placeholder="SEARCH SONG TITLE OR ARTIST..."
+                        placeholderTextColor={isDarkMode ? '#666666' : '#888888'}
+                        value={playlistSearchQuery}
+                        onChangeText={setPlaylistSearchQuery}
+                        containerStyle={{ flex: 1 }}
+                      />
+                      <BrutalistButton
+                        onPress={handlePlaylistSearch}
+                        style={styles.searchBtn}
+                        accentColor={colors.yellow}
+                      >
+                        <Search size={18} color={isDarkMode ? '#FFFFFF' : '#000000'} />
+                      </BrutalistButton>
                     </View>
-                    <BrutalistButton
-                      onPress={async () => {
-                        try {
-                          await apiClient.delete(`/music/playlist/${pl.id}`);
-                          loadPlaylists();
-                        } catch (e) {
-                          Alert.alert('ERROR', 'FAILED TO DELETE PLAYLIST.');
-                        }
-                      }}
-                      accentColor={colors.red}
-                      style={{ paddingHorizontal: 8, paddingVertical: 6 }}
-                    >
-                      <Trash2 size={12} color="#FFFFFF" />
-                    </BrutalistButton>
+
+                    {playlistSearching && <ActivityIndicator color={colors.textPrimary} style={{ marginVertical: 8 }} />}
+
+                    {playlistSearchResults.map((track) => (
+                      <BrutalistCard key={track.trackUri} accentColor="#FFFFFF" padding={8} style={{ marginBottom: 6 }}>
+                        <View style={styles.trackRow}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.trackTitle} numberOfLines={1}>
+                              {track.title.toUpperCase()}
+                            </Text>
+                            <Text style={styles.trackArtist} numberOfLines={1}>
+                              {track.artist.toUpperCase()}
+                            </Text>
+                          </View>
+                          <BrutalistButton
+                            onPress={() => handleAddTrackToPlaylist(track)}
+                            accentColor={colors.green}
+                            style={{ width: 28, height: 28, paddingHorizontal: 0, paddingVertical: 0 }}
+                          >
+                            <Plus size={14} color="#000000" />
+                          </BrutalistButton>
+                        </View>
+                      </BrutalistCard>
+                    ))}
+                    {selectedPlaylist.tracks?.length > 0 && (
+                      <Text style={[styles.label, { color: colors.textPrimary, marginTop: 16 }]}>PLAYLIST TRACKS</Text>
+                    )}
                   </View>
-                </BrutalistCard>
-              ))
-            )}
-          </ScrollView>
+                }
+                ListEmptyComponent={
+                  <View style={styles.center}>
+                    <Text style={[styles.emptyText, { color: colors.textSecondary }]}>NO TRACKS IN THIS DECK. SEARCH AND ADD TRACKS ABOVE.</Text>
+                  </View>
+                }
+              />
+            </View>
+          ) : (
+            <ScrollView contentContainerStyle={styles.scrollContent}>
+              {/* Create Playlist */}
+              <BrutalistCard accentColor={colors.cardBg} padding={12} style={styles.metaCard}>
+                <Text style={[styles.label, { color: colors.textPrimary }]}>NEW PLAYLIST CONTAINER</Text>
+                <View style={styles.row}>
+                  <BrutalistTextInput
+                    placeholder="PLAYLIST NAME..."
+                    placeholderTextColor={isDarkMode ? '#666666' : '#888888'}
+                    value={newPlaylistName}
+                    onChangeText={setNewPlaylistName}
+                    containerStyle={{ flex: 1, marginRight: 8 }}
+                  />
+                  <BrutalistButton
+                    onPress={handleCreatePlaylist}
+                    title="CREATE"
+                    accentColor={colors.yellow}
+                  />
+                </View>
+              </BrutalistCard>
+
+              {/* Playlist list */}
+              {loadingPlaylists ? (
+                <ActivityIndicator color={colors.textPrimary} />
+              ) : (
+                playlists.map((pl) => (
+                  <TouchableOpacity key={pl.id} onPress={() => loadPlaylistDetails(pl.id)}>
+                    <BrutalistCard accentColor={colors.cardBg} padding={12} style={styles.metaCard}>
+                      <View style={styles.row}>
+                        <ListMusic size={20} color={colors.textPrimary} style={{ marginRight: 8 }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.playlistName, { color: colors.textPrimary }]}>{pl.name.toUpperCase()}</Text>
+                          <Text style={[styles.playlistTracks, { color: colors.textSecondary }]}>
+                            {pl.tracks?.length || 0} TRACKS RESOLVED
+                          </Text>
+                        </View>
+                        <BrutalistButton
+                          onPress={async () => {
+                            try {
+                              await apiClient.delete(`/music/playlist/${pl.id}`);
+                              loadPlaylists();
+                            } catch (e) {
+                              Alert.alert('ERROR', 'FAILED TO DELETE PLAYLIST.');
+                            }
+                          }}
+                          accentColor={colors.red}
+                          style={{ paddingHorizontal: 8, paddingVertical: 6 }}
+                        >
+                          <Trash2 size={12} color="#FFFFFF" />
+                        </BrutalistButton>
+                      </View>
+                    </BrutalistCard>
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
+          )
         )}
 
         {activeTab === 'likes' && (
@@ -349,6 +486,16 @@ export const MusicScreen: React.FC<any> = ({ navigation }) => {
             keyExtractor={(item) => item.trackUri}
             renderItem={renderTrackItem}
             contentContainerStyle={styles.listContent}
+            ListHeaderComponent={
+              likedSongs.length > 0 ? (
+                <BrutalistCard accentColor={colors.green} padding={12} style={{ marginBottom: 12 }}>
+                  <TouchableOpacity onPress={() => playTrack(likedSongs[0], likedSongs)} style={[styles.row, { justifyContent: 'center', gap: 8 }]}>
+                    <Play size={18} color="#000000" fill="#000000" />
+                    <Text style={{ fontWeight: 'bold', fontFamily: BRUTALIST_STYLES.fontBold }}>STREAM LIKED PACKET</Text>
+                  </TouchableOpacity>
+                </BrutalistCard>
+              ) : null
+            }
             ListEmptyComponent={
               <View style={styles.center}>
                 <Text style={[styles.emptyText, { color: colors.textSecondary }]}>NO SONGS SAVED IN YOUR LIKES PACKET</Text>
@@ -459,6 +606,14 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontFamily: BRUTALIST_STYLES.fontBold,
     color: '#000000',
+  },
+  playlistDetailTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    flex: 1,
+    textAlign: 'center',
+    alignSelf: 'center',
   },
   tabBar: {
     flexDirection: 'row',
