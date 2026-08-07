@@ -27,8 +27,65 @@ const addTrackSchema = z.object({
   trackUri: z.string().url(),
 });
 
+async function searchYouTube(query: string): Promise<any[]> {
+  try {
+    const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      timeout: 5000,
+    });
+
+    const html = response.data;
+    const regex = /var ytInitialData\s*=\s*({.+?});/;
+    const match = regex.exec(html);
+    if (!match) return [];
+
+    const json = JSON.parse(match[1]);
+    const contents = json.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
+
+    const tracks: any[] = [];
+    for (const item of contents) {
+      const video = item.videoRenderer;
+      if (!video) continue;
+
+      const title = video.title?.runs?.[0]?.text || '';
+      const videoId = video.videoId;
+      if (!videoId) continue;
+
+      const artist = video.ownerText?.runs?.[0]?.text || 'Unknown Artist';
+      const durationText = video.lengthText?.simpleText || '3:00';
+      
+      const parts = durationText.split(':').map(Number);
+      let duration = 0;
+      if (parts.length === 2) {
+        duration = parts[0] * 60 + parts[1];
+      } else if (parts.length === 3) {
+        duration = parts[0] * 3600 + parts[1] * 60 + parts[2];
+      }
+
+      const coverUrl = video.thumbnail?.thumbnails?.[0]?.url || null;
+      const trackUri = `https://www.youtube.com/watch?v=${videoId}`;
+
+      tracks.push({
+        title,
+        artist,
+        duration,
+        trackUri,
+        coverUrl,
+      });
+    }
+    return tracks;
+  } catch (err) {
+    console.error('[YouTubeSearch] Scraper failed:', err);
+    return [];
+  }
+}
+
 export async function musicRoutes(fastify: FastifyInstance) {
-  // 1. Search Music via Lavalink Node
+  // 1. Search Music via Lavalink Node (with direct YouTube scraper fallback)
   fastify.get('/search', { preHandler: [authenticate] }, async (request, reply) => {
     const { q } = searchSchema.parse(request.query);
     try {
@@ -40,20 +97,27 @@ export async function musicRoutes(fastify: FastifyInstance) {
       });
 
       const data = response.data;
-      if (data.loadType === 'search' && Array.isArray(data.data)) {
+      const loadTypeUpper = String(data.loadType).toUpperCase();
+      
+      if ((loadTypeUpper === 'SEARCH' || loadTypeUpper === 'TRACK_LOADED') && Array.isArray(data.data) && data.data.length > 0) {
         const tracks = data.data.map((item: any) => ({
           title: item.info.title,
           artist: item.info.author,
-          duration: Math.floor(item.info.length / 1000), // convert ms to seconds
-          trackUri: item.info.uri, // YouTube watch link
+          duration: Math.floor(item.info.length / 1000),
+          trackUri: item.info.uri,
           coverUrl: item.info.artworkUrl || null,
         }));
         return reply.send(tracks);
       }
-      return reply.send([]);
+      
+      // Fallback if Lavalink returned empty, search result load type was not matched, or errored
+      fastify.log.warn('[MusicRouter] Lavalink search empty/unsupported. Attempting YouTube search fallback...');
+      const fallbackTracks = await searchYouTube(q);
+      return reply.send(fallbackTracks);
     } catch (err: any) {
-      fastify.log.error(err, '[MusicRouter] Lavalink search failed');
-      return reply.status(500).send({ error: 'Internal Error', message: 'Failed to search tracks via Lavalink' });
+      fastify.log.error(err, '[MusicRouter] Lavalink search request failed. Triggering YouTube search fallback...');
+      const fallbackTracks = await searchYouTube(q);
+      return reply.send(fallbackTracks);
     }
   });
 
