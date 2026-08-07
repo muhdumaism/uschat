@@ -191,7 +191,7 @@ export const MessageRequestsScreen: React.FC<any> = ({ navigation }) => {
                     <Inbox size={28} color="#FFFFFF" style={{ marginBottom: 12 }} />
                     <Text style={styles.emptyTitle}>NO REQUESTS PENDING</Text>
                     <Text style={styles.emptySub}>
-                      Your incoming and outgoing E2EE channels are clean.
+                      No pending message requests.
                     </Text>
                   </View>
                 </BrutalistCard>

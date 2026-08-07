@@ -3,6 +3,7 @@ import { apiClient } from '../api/client';
 import { SignalEngine } from '../crypto/signalEngine';
 import { WebSocketClient } from '../api/wsClient';
 import { NativeModules, Platform } from 'react-native';
+import { useAuthStore } from './authStore';
 
 export interface ChatMessage {
   id: string;
@@ -116,10 +117,50 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   sendMessage: async (chatId, text, options) => {
-    try {
-      const isImageUrl = text.startsWith('http://') || text.startsWith('https://');
-      const msgType = (options as any)?.messageType || (isImageUrl ? 'IMAGE' : 'TEXT');
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const currentUser = useAuthStore.getState().user;
+    const isImageUrl = text.startsWith('http://') || text.startsWith('https://');
+    const msgType = (options as any)?.messageType || (isImageUrl ? 'IMAGE' : 'TEXT');
 
+    let replyToObj = undefined;
+    if (options?.replyToId) {
+      const chatMsgs = get().messages[chatId] || [];
+      replyToObj = chatMsgs.find(m => m.id === options.replyToId);
+    }
+
+    const optimisticMsg: ChatMessage = {
+      id: tempId,
+      chatId,
+      senderId: currentUser?.id || 'self',
+      sender: {
+        id: currentUser?.id || 'self',
+        username: currentUser?.username || 'self',
+        displayName: currentUser?.displayName || 'Self',
+        avatarUrl: currentUser?.avatarUrl,
+      },
+      encryptedContent: '',
+      decryptedText: text,
+      messageType: msgType,
+      viewOnce: options?.viewOnce || false,
+      isViewed: false,
+      replyToId: options?.replyToId,
+      replyTo: replyToObj,
+      createdAt: new Date().toISOString(),
+      reactions: [],
+    };
+
+    // Update state immediately
+    set((state) => {
+      const existing = state.messages[chatId] || [];
+      return {
+        messages: {
+          ...state.messages,
+          [chatId]: [...existing, optimisticMsg],
+        },
+      };
+    });
+
+    try {
       const encrypted = await SignalEngine.encryptMessage(text, chatId);
 
       const res = await apiClient.post('/messages/send', {
@@ -145,29 +186,75 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       set((state) => {
         const existing = state.messages[chatId] || [];
+        const updated = existing.map((m) => (m.id === tempId ? newMsg : m));
         return {
           messages: {
             ...state.messages,
-            [chatId]: [...existing, newMsg],
+            [chatId]: updated,
           },
         };
       });
     } catch (err) {
       console.error('Send message error:', err);
+      // Rollback: remove temporary optimistic message
+      set((state) => {
+        const existing = state.messages[chatId] || [];
+        return {
+          messages: {
+            ...state.messages,
+            [chatId]: existing.filter((m) => m.id !== tempId),
+          },
+        };
+      });
     }
   },
 
   editMessage: async (messageId, chatId, newText) => {
-    const encrypted = await SignalEngine.encryptMessage(newText, chatId);
-    const res = await apiClient.patch(`/messages/${messageId}/edit`, {
-      newContent: encrypted.cipherText,
-    });
-
+    let previousMessages: ChatMessage[] = [];
     set((state) => {
       const list = state.messages[chatId] || [];
+      previousMessages = list;
+      const updatedList = list.map((m) =>
+        m.id === messageId ? { ...m, decryptedText: newText } : m
+      );
+      return {
+        messages: {
+          ...state.messages,
+          [chatId]: updatedList,
+        },
+      };
+    });
+
+    try {
+      const encrypted = await SignalEngine.encryptMessage(newText, chatId);
+      await apiClient.patch(`/messages/${messageId}/edit`, {
+        newContent: encrypted.cipherText,
+      });
+    } catch (err) {
+      console.error('Edit message error:', err);
+      // Rollback
+      set((state) => ({
+        messages: {
+          ...state.messages,
+          [chatId]: previousMessages,
+        },
+      }));
+    }
+  },
+
+  deleteMessage: async (messageId, chatId) => {
+    let previousMessages: ChatMessage[] = [];
+    set((state) => {
+      const list = state.messages[chatId] || [];
+      previousMessages = list;
       const updatedList = list.map((m) =>
         m.id === messageId
-          ? { ...m, encryptedContent: encrypted.cipherText, decryptedText: newText }
+          ? {
+              ...m,
+              isDeletedForEveryone: true,
+              encryptedContent: '[DELETED_MESSAGE]',
+              decryptedText: 'This message was deleted',
+            }
           : m
       );
       return {
@@ -177,39 +264,71 @@ export const useChatStore = create<ChatState>((set, get) => ({
         },
       };
     });
-  },
 
-  deleteMessage: async (messageId, chatId) => {
     try {
       await apiClient.delete(`/messages/${messageId}/everyone`);
-      set((state) => {
-        const list = state.messages[chatId] || [];
-        const updatedList = list.map((m) =>
-          m.id === messageId
-            ? { ...m, isDeletedForEveryone: true, encryptedContent: '[DELETED_MESSAGE]', decryptedText: 'This message was deleted' }
-            : m
-        );
-        return {
-          messages: {
-            ...state.messages,
-            [chatId]: updatedList,
-          },
-        };
-      });
     } catch (err) {
       console.error('Delete message error:', err);
+      // Rollback
+      set((state) => ({
+        messages: {
+          ...state.messages,
+          [chatId]: previousMessages,
+        },
+      }));
     }
   },
 
   reactToMessage: async (messageId, chatId, emoji) => {
+    const currentUser = useAuthStore.getState().user;
+    if (!currentUser) return;
+
+    let previousMessages: ChatMessage[] = [];
+    set((state) => {
+      const list = state.messages[chatId] || [];
+      previousMessages = list;
+      const updatedList = list.map((m) => {
+        if (m.id !== messageId) return m;
+
+        const currentReactions = m.reactions || [];
+        const userReactIndex = currentReactions.findIndex((r) => r.userId === currentUser.id);
+        let updatedReactions = [...currentReactions];
+
+        if (userReactIndex !== -1) {
+          if (currentReactions[userReactIndex].emoji === emoji) {
+            updatedReactions.splice(userReactIndex, 1);
+          } else {
+            updatedReactions[userReactIndex] = {
+              userId: currentUser.id,
+              username: currentUser.username,
+              emoji,
+            };
+          }
+        } else {
+          updatedReactions.push({
+            userId: currentUser.id,
+            username: currentUser.username,
+            emoji,
+          });
+        }
+
+        return { ...m, reactions: updatedReactions };
+      });
+
+      return {
+        messages: {
+          ...state.messages,
+          [chatId]: updatedList,
+        },
+      };
+    });
+
     try {
       const res = await apiClient.post(`/messages/${messageId}/react`, { emoji });
       set((state) => {
         const list = state.messages[chatId] || [];
         const updatedList = list.map((m) =>
-          m.id === messageId
-            ? { ...m, reactions: res.data.reactions }
-            : m
+          m.id === messageId ? { ...m, reactions: res.data.reactions } : m
         );
         return {
           messages: {
@@ -220,6 +339,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
     } catch (err) {
       console.error('React to message error:', err);
+      // Rollback
+      set((state) => ({
+        messages: {
+          ...state.messages,
+          [chatId]: previousMessages,
+        },
+      }));
     }
   },
 
@@ -237,6 +363,28 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ wsListenersInitialized: true });
 
     WebSocketClient.addListener(async (event, payload) => {
+      if (event === 'CALL_OFFER') {
+        const { useCallStore } = require('./callStore');
+        useCallStore.getState().receiveCall(payload.callerId, payload.callerName, payload.sdp, payload.chatId);
+        return;
+      } else if (event === 'CALL_ANSWER') {
+        const { useCallStore } = require('./callStore');
+        useCallStore.getState().handleAnswer(payload.sdp);
+        return;
+      } else if (event === 'ICE_CANDIDATE') {
+        const { useCallStore } = require('./callStore');
+        useCallStore.getState().handleIceCandidate(payload.candidate);
+        return;
+      } else if (event === 'CALL_RINGING') {
+        const { useCallStore } = require('./callStore');
+        useCallStore.setState({ status: 'ringing' });
+        return;
+      } else if (event === 'CALL_REJECT' || event === 'CALL_HANGUP') {
+        const { useCallStore } = require('./callStore');
+        useCallStore.getState().cleanUp();
+        return;
+      }
+
       if (event === 'NEW_MESSAGE') {
         const msg: ChatMessage = payload;
         msg.decryptedText = await SignalEngine.decryptMessage(msg.encryptedContent, msg.chatId);

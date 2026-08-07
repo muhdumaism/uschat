@@ -11,6 +11,8 @@ import { SettingsScreen } from '../screens/Settings/SettingsScreen';
 import { MessageRequestsScreen } from '../screens/Chat/MessageRequestsScreen';
 import { MusicScreen } from '../screens/Music/MusicScreen';
 import { GroupSettingsScreen } from '../screens/Chat/GroupSettingsScreen';
+import { CallScreen } from '../screens/Call/CallScreen';
+import { useCallStore } from '../store/callStore';
 import { useNavigation } from '@react-navigation/native';
 import { ActivityIndicator, View, NativeEventEmitter, NativeModules, Platform } from 'react-native';
 import { COLORS } from '../theme/colors';
@@ -56,6 +58,19 @@ const OpenChatBridge = () => {
   return null;
 };
 
+const CallBridge = () => {
+  const navigation = useNavigation<any>();
+  const callStatus = useCallStore((s) => s.status);
+
+  useEffect(() => {
+    if (callStatus !== 'idle') {
+      navigation.navigate('Call');
+    }
+  }, [callStatus]);
+
+  return null;
+};
+
 export const AppNavigator = () => {
   const { isAuthenticated, isLoading, loadSession } = useAuthStore();
 
@@ -89,10 +104,12 @@ export const AppNavigator = () => {
             <Stack.Screen name="MessageRequests" component={MessageRequestsScreen} />
             <Stack.Screen name="Music" component={MusicScreen} />
             <Stack.Screen name="GroupSettings" component={GroupSettingsScreen} />
+            <Stack.Screen name="Call" component={CallScreen} options={{ gestureEnabled: false }} />
           </>
         )}
       </Stack.Navigator>
       {isAuthenticated && <OpenChatBridge />}
+      {isAuthenticated && <CallBridge />}
     </>
   );
 };

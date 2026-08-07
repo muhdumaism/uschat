@@ -12,7 +12,7 @@ import {
   Image,
 } from 'react-native';
 import { Mail, Lock, ShieldAlert } from 'lucide-react-native';
-import { BRUTALIST_COLORS, BRUTALIST_STYLES } from '../../theme/brutalistTheme';
+import { BRUTALIST_COLORS, BRUTALIST_STYLES, useBrutalistTheme } from '../../theme/brutalistTheme';
 import { BrutalistCard } from '../../components/BrutalistCard';
 import { BrutalistButton } from '../../components/BrutalistButton';
 import { BrutalistTextInput } from '../../components/BrutalistTextInput';
@@ -20,6 +20,7 @@ import { apiClient } from '../../api/client';
 import { useAuthStore } from '../../store/authStore';
 
 export const LoginScreen: React.FC<any> = ({ navigation }) => {
+  const { colors, isDarkMode } = useBrutalistTheme();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -61,22 +62,22 @@ export const LoginScreen: React.FC<any> = ({ navigation }) => {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
     >
-      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
 
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.statusBarSpacer} />
 
         <View style={styles.cardWrapper}>
           <BrutalistCard
-            accentColor={BRUTALIST_COLORS.cardBg}
+            accentColor={colors.cardBg}
             padding={24}
             style={styles.card}
           >
             {/* Header info */}
             <View style={styles.logoRow}>
-              <View style={styles.logoBox}>
+              <View style={[styles.logoBox, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
                 <Image
                   source={require('../../../assets/uschatlogo-trans.png')}
                   style={styles.logoImage}
@@ -84,28 +85,29 @@ export const LoginScreen: React.FC<any> = ({ navigation }) => {
                 />
               </View>
               <View style={styles.brandInfo}>
-                <Text style={styles.brandTitle}>USCHAT SECURE</Text>
-                <Text style={styles.brandSub}>VERSION 2.0.0 (BRUTALIST)</Text>
+                <Text style={[styles.brandTitle, { color: colors.textPrimary }]}>USCHAT SECURE</Text>
+                <Text style={[styles.brandSub, { color: colors.textSecondary }]}>VERSION 2.0.0 (BRUTALIST)</Text>
               </View>
             </View>
 
             {/* Info panel banner */}
             <BrutalistCard
-              accentColor={BRUTALIST_COLORS.yellow}
+              accentColor={colors.yellow}
               padding={10}
               style={styles.banner}
               borderRadius={BRUTALIST_STYLES.borderRadiusSmall}
             >
-              <Text style={styles.bannerText}>
-                ENTER YOUR INITIATION IDENTIFIERS TO CONNECT YOUR COMMUNICATIONS CORE.
+              <Text style={[styles.bannerText, { color: '#000000' }]}>
+                Sign in with your email and password to continue.
               </Text>
             </BrutalistCard>
 
             {/* Form */}
             <View style={styles.form}>
-              <Text style={styles.label}>EMAIL ADDRESS</Text>
+              <Text style={[styles.label, { color: colors.textPrimary }]}>EMAIL ADDRESS</Text>
               <BrutalistTextInput
                 placeholder="client@uschat.space"
+                placeholderTextColor={isDarkMode ? '#666666' : '#888888'}
                 value={email}
                 onChangeText={(val) => {
                   setEmail(val);
@@ -113,27 +115,28 @@ export const LoginScreen: React.FC<any> = ({ navigation }) => {
                 }}
                 autoCapitalize="none"
                 keyboardType="email-address"
-                icon={<Mail size={16} color="#000000" />}
+                icon={<Mail size={16} color={isDarkMode ? '#FFFFFF' : '#000000'} />}
                 containerStyle={{ marginBottom: 20 }}
               />
 
-              <Text style={styles.label}>PASSWORD</Text>
+              <Text style={[styles.label, { color: colors.textPrimary }]}>PASSWORD</Text>
               <BrutalistTextInput
                 placeholder="••••••••••••"
+                placeholderTextColor={isDarkMode ? '#666666' : '#888888'}
                 value={password}
                 onChangeText={(val) => {
                   setPassword(val);
                   setError('');
                 }}
                 secureTextEntry
-                icon={<Lock size={16} color="#000000" />}
+                icon={<Lock size={16} color={isDarkMode ? '#FFFFFF' : '#000000'} />}
                 containerStyle={{ marginBottom: 24 }}
               />
 
               {error ? (
-                <View style={styles.errorContainer}>
-                  <ShieldAlert size={16} color={BRUTALIST_COLORS.red} style={{ marginRight: 8 }} />
-                  <Text style={styles.errorText}>{error}</Text>
+                <View style={[styles.errorContainer, { backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.1)' : '#FFEEEE', borderColor: colors.red }]}>
+                  <ShieldAlert size={16} color={colors.red} style={{ marginRight: 8 }} />
+                  <Text style={[styles.errorText, { color: colors.red }]}>{error}</Text>
                 </View>
               ) : null}
             </View>
@@ -145,7 +148,7 @@ export const LoginScreen: React.FC<any> = ({ navigation }) => {
                 onPress={handleLogin}
                 disabled={loading}
                 style={styles.btn}
-                accentColor={BRUTALIST_COLORS.yellow}
+                accentColor={colors.yellow}
               />
               <BrutalistButton
                 title="CLEAR"
@@ -155,19 +158,19 @@ export const LoginScreen: React.FC<any> = ({ navigation }) => {
                   setError('');
                 }}
                 style={styles.btn}
-                accentColor={BRUTALIST_COLORS.blue}
+                accentColor={colors.blue}
                 textStyle={{ color: '#FFFFFF' }}
               />
             </View>
 
             {/* Navigation Footer */}
-            <View style={styles.footer}>
+            <View style={[styles.footer, { borderColor: colors.border }]}>
               <TouchableOpacity
                 onPress={() => navigation.navigate('Register')}
                 style={styles.footerLink}
               >
-                <Text style={styles.footerText}>
-                  NEW IDENTITY? <Text style={styles.highlight}>CREATE AN ACCOUNT</Text>
+                <Text style={[styles.footerText, { color: colors.textSecondary }]}>
+                  New here? <Text style={[styles.highlight, { color: colors.blue }]}>CREATE AN ACCOUNT</Text>
                 </Text>
               </TouchableOpacity>
             </View>

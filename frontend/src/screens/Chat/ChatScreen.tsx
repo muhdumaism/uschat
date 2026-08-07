@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import Reanimated, { useSharedValue, useAnimatedStyle, withTiming, withSpring, withRepeat } from 'react-native-reanimated';
 import {
   View,
   Text,
@@ -16,7 +17,7 @@ import {
   Vibration,
   ActivityIndicator,
 } from 'react-native';
-import { ArrowLeft, Send, Eye, ShieldCheck, Lock, Reply, Trash2, Copy, Edit, Smile, Plus, Mic, Bell, BellOff, Pin } from 'lucide-react-native';
+import { ArrowLeft, Send, Eye, ShieldCheck, Lock, Reply, Trash2, Copy, Edit, Smile, Plus, Mic, Bell, BellOff, Pin, Phone } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system';
@@ -29,9 +30,10 @@ import { ImagePreviewModal } from '../../components/ImagePreviewModal';
 import { AttachmentSheet } from '../../components/AttachmentSheet';
 import { EmojiPickerModal } from '../../components/EmojiPickerModal';
 import { COLORS } from '../../theme/colors';
-import { BRUTALIST_COLORS, BRUTALIST_STYLES } from '../../theme/brutalistTheme';
+import { BRUTALIST_COLORS, BRUTALIST_STYLES, useBrutalistTheme } from '../../theme/brutalistTheme';
 import { useChatStore } from '../../store/chatStore';
 import { useAuthStore } from '../../store/authStore';
+import { useCallStore } from '../../store/callStore';
 import { apiClient } from '../../api/client';
 import { API_BASE_URL } from '../../api/config';
 import { WebSocketClient } from '../../api/wsClient';
@@ -48,7 +50,63 @@ const getReplyText = (msg: any) => {
   }
 };
 
+const PulsingRecordDot = () => {
+  const scale = useSharedValue(1);
+  useEffect(() => {
+    scale.value = withRepeat(withTiming(1.3, { duration: 500 }), -1, true);
+  }, []);
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+  return (
+    <Reanimated.View
+      style={[
+        animStyle,
+        {
+          width: 8,
+          height: 8,
+          borderRadius: 4,
+          backgroundColor: '#FF3B30',
+          marginRight: 8,
+        }
+      ]}
+    />
+  );
+};
+
+const VoiceRecordingWaveform: React.FC<{ amplitude: any }> = ({ amplitude }) => {
+  const bars = Array.from({ length: 15 }, (_, i) => i);
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', height: 40, paddingHorizontal: 10 }}>
+      {bars.map((index) => {
+        const animatedStyle = useAnimatedStyle(() => {
+          const scale = 0.3 + 0.7 * Math.sin((index / 14) * Math.PI);
+          const heightVal = Math.max(4, amplitude.value * 35 * scale);
+          return {
+            height: withTiming(heightVal, { duration: 80 }),
+          };
+        });
+        return (
+          <Reanimated.View
+            key={index}
+            style={[
+              animatedStyle,
+              {
+                width: 3,
+                backgroundColor: '#FF3B30',
+                marginHorizontal: 1.5,
+                borderRadius: 1.5,
+              }
+            ]}
+          />
+        );
+      })}
+    </View>
+  );
+};
+
 export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
+  const { colors, isDarkMode } = useBrutalistTheme();
   const { chatId, name, peerUsername } = route.params;
   const [inputText, setInputText] = useState('');
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -112,7 +170,7 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
   const [replyingToMessage, setReplyingToMessage] = useState<any>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
-  const { messages, fetchMessages, sendMessage, editMessage, deleteMessage, reactToMessage, chats } = useChatStore();
+  const { messages, fetchMessages, sendMessage, editMessage, deleteMessage, reactToMessage, chats, fetchChats } = useChatStore();
   const currentUser = useAuthStore((s) => s.user);
 
   // Voice recording states
@@ -121,6 +179,7 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
   const [recordingWaveform, setRecordingWaveform] = useState<number[]>([]);
   const [recordingInstance, setRecordingInstance] = useState<Audio.Recording | null>(null);
   const [isUploadingVoice, setIsUploadingVoice] = useState(false);
+  const amplitude = useSharedValue(0.1);
 
   // Redesigned overlay states
   const [showAttachmentSheet, setShowAttachmentSheet] = useState(false);
@@ -171,7 +230,8 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
           setRecordingDuration(Math.floor(status.durationMillis / 1000));
           if (status.metering !== undefined) {
             const db = status.metering;
-            const normalized = Math.max(0, 1 + db / 60);
+            const normalized = Math.max(0.1, 1 + db / 60);
+            amplitude.value = normalized;
             setRecordingWaveform((prev) => [...prev, normalized]);
           }
         }
@@ -342,7 +402,7 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
       setProfileData({
         username: currentUser?.username || 'self',
         displayName: currentUser?.displayName || 'SAVED MESSAGES',
-        bio: currentUser?.bio || 'YOUR SECURED MEMORY STORAGE CELL.',
+        bio: currentUser?.bio || 'Your profile.',
         avatarUrl: currentUser?.avatarUrl,
       });
       setShowProfileModal(true);
@@ -358,7 +418,7 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
       setProfileData({
         username: peerUsername,
         displayName: name,
-        bio: 'E2EE ROUTED IDENTITY CHANNEL.',
+        bio: 'Private chat.',
       });
       setShowProfileModal(true);
     }
@@ -367,13 +427,57 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
   const chatItem = chats.find((c) => c.id === chatId);
   const isGroup = chatItem ? chatItem.type === 'GROUP' : false;
 
+  const resolvedDetails = React.useMemo(() => {
+    if (!chatItem) {
+      return {
+        displayName: name || 'Chat',
+        username: peerUsername || undefined,
+        avatar: undefined,
+      };
+    }
+    if (chatItem.type === 'GROUP') {
+      return {
+        displayName: chatItem.name,
+        username: undefined,
+        avatar: chatItem.avatar,
+      };
+    } else {
+      const otherMember = chatItem.members?.find((m: any) => m.user?.id !== currentUser?.id);
+      const peer = otherMember?.user;
+      return {
+        displayName: peer?.displayName || peer?.username || chatItem.name,
+        username: peer?.username,
+        avatar: peer?.avatarUrl,
+      };
+    }
+  }, [chatItem, name, peerUsername, currentUser]);
+
   const handleHeaderPress = () => {
     if (isGroup) {
-      navigation.navigate('GroupSettings', { chatId, groupName: name });
+      navigation.navigate('GroupSettings', { chatId, groupName: resolvedDetails.displayName });
     } else {
       handleOpenProfile();
     }
   };
+
+  const handleVoiceCall = async () => {
+    if (isGroup) {
+      Alert.alert('Group Calls', 'Group voice calling is currently not supported.');
+      return;
+    }
+    const recipient = chatItem?.members?.find((m: any) => m.user?.id !== currentUser?.id)?.user;
+    if (!recipient) {
+      Alert.alert('Error', 'Unable to initiate call. Recipient not found.');
+      return;
+    }
+    await useCallStore.getState().initiateCall(chatId, recipient.id, recipient.displayName || recipient.username);
+  };
+
+  useEffect(() => {
+    if (!chatItem) {
+      fetchChats();
+    }
+  }, [chatId, chatItem]);
 
   useEffect(() => {
     fetchMessages(chatId);
@@ -646,35 +750,40 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
 
       {/* Top Phone Status Bar Notch Clearance Spacer */}
-      <View style={styles.statusBarSpacer} />
+      <View style={[styles.statusBarSpacer, { backgroundColor: colors.background }]} />
 
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <ArrowLeft size={22} color={COLORS.textPrimary} />
+      <View style={[styles.header, { backgroundColor: colors.background, borderColor: colors.border }]}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backBtn, { borderColor: colors.border, backgroundColor: colors.yellow }]}>
+          <ArrowLeft size={22} color="#000000" />
         </TouchableOpacity>
 
         <TouchableOpacity onPress={handleHeaderPress} style={styles.headerProfile}>
-          <Avatar name={name} size={38} />
+          <Avatar uri={resolvedDetails.avatar} name={resolvedDetails.displayName} size={38} />
           <View style={styles.headerTitleBox}>
-            <Text style={styles.headerName}>{name}</Text>
-            {peerUsername && <Text style={styles.headerHandle}>@{peerUsername}</Text>}
+            <Text style={[styles.headerName, { color: colors.textPrimary }]}>{resolvedDetails.displayName}</Text>
+            {resolvedDetails.username && <Text style={[styles.headerHandle, { color: colors.textSecondary }]}>@{resolvedDetails.username}</Text>}
           </View>
         </TouchableOpacity>
 
         <View style={styles.headerActions}>
-          <TouchableOpacity onPress={toggleMuteChat} style={styles.headerIcon}>
+          {!isGroup && (
+            <TouchableOpacity onPress={handleVoiceCall} style={[styles.headerIcon, { backgroundColor: colors.cardBg, borderColor: colors.border, marginRight: 8 }]}>
+              <Phone size={18} color={isDarkMode ? '#FFFFFF' : '#000000'} />
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity onPress={toggleMuteChat} style={[styles.headerIcon, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
             {isChatMuted ? (
               <BellOff size={18} color="#FF3B30" />
             ) : (
-              <Bell size={18} color={COLORS.textPrimary} />
+              <Bell size={18} color={isDarkMode ? '#FFFFFF' : '#000000'} />
             )}
           </TouchableOpacity>
-          <TouchableOpacity onPress={handleOpenProfile} style={styles.headerIcon}>
-            <ShieldCheck size={20} color={COLORS.primary} />
+          <TouchableOpacity onPress={handleOpenProfile} style={[styles.headerIcon, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+            <ShieldCheck size={20} color={isDarkMode ? colors.green : '#000000'} />
           </TouchableOpacity>
         </View>
       </View>
@@ -757,58 +866,60 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
           </View>
         )}
         {isRecording ? (
-          <View style={styles.inputBarContainer}>
-            <View style={styles.pillContainer}>
-              <View style={styles.recordingDot} />
-              <Text style={styles.recordingText}>Recording {formatDuration(recordingDuration)}</Text>
-              
+          <View style={[styles.inputBarContainer, { backgroundColor: colors.background, borderTopColor: colors.border, flexDirection: 'row', alignItems: 'center' }]}>
+            <View style={[styles.pillContainer, { backgroundColor: colors.cardBg, borderColor: colors.border, flexDirection: 'row', alignItems: 'center', flex: 1, paddingVertical: 4 }]}>
+              <PulsingRecordDot />
+              <Text style={[styles.recordingText, { color: colors.textPrimary, marginRight: 10 }]}>{formatDuration(recordingDuration)}</Text>
+              <View style={{ flex: 1, justifyContent: 'center' }}>
+                <VoiceRecordingWaveform amplitude={amplitude} />
+              </View>
               <TouchableOpacity onPress={cancelRecording} style={styles.recordingCancelBtn}>
-                <Text style={styles.recordingCancelText}>Cancel</Text>
+                <Text style={[styles.recordingCancelText, { color: colors.textSecondary, fontWeight: '900' }]}>Cancel</Text>
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity onPress={finishRecording} style={[styles.actionBtn, styles.micBtnActive]}>
-              <Send size={18} color="#FFF" />
+            <TouchableOpacity onPress={finishRecording} style={[styles.actionBtn, styles.micBtnActive, { borderColor: colors.border, backgroundColor: colors.green, marginLeft: 8 }]}>
+              <Send size={18} color="#000" />
             </TouchableOpacity>
           </View>
         ) : (
-          <View style={styles.inputBarContainer}>
+          <View style={[styles.inputBarContainer, { backgroundColor: colors.background, borderTopColor: colors.border }]}>
             {isUploadingVoice && (
-              <ActivityIndicator size="small" color={COLORS.primary} style={{ marginRight: 8 }} />
+              <ActivityIndicator size="small" color={colors.textPrimary} style={{ marginRight: 8 }} />
             )}
             
             <TouchableOpacity
               onPress={() => setShowAttachmentSheet(true)}
-              style={styles.plusBtn}
+              style={[styles.plusBtn, { borderColor: colors.border }]}
             >
               <Plus size={20} color="#FFF" />
             </TouchableOpacity>
 
-            <View style={styles.pillContainer}>
+            <View style={[styles.pillContainer, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
               <TextInput
                 placeholder={peerUsername ? `Message @${name}` : 'Message'}
-                placeholderTextColor="#888"
+                placeholderTextColor={isDarkMode ? '#666666' : '#888888'}
                 value={inputText}
                 onChangeText={setInputText}
-                style={styles.textInput}
+                style={[styles.textInput, { color: colors.textPrimary }]}
               />
 
               <TouchableOpacity
                 onPress={() => setShowEmojiPicker(true)}
                 style={styles.smileBtn}
               >
-                <Smile size={20} color="#FFF" />
+                <Smile size={20} color={isDarkMode ? '#FFFFFF' : '#000000'} />
               </TouchableOpacity>
             </View>
 
             {inputText.trim().length > 0 ? (
-              <TouchableOpacity onPress={handleSend} style={styles.actionBtn}>
+              <TouchableOpacity onPress={handleSend} style={[styles.actionBtn, { borderColor: colors.border }]}>
                 <Send size={18} color="#FFF" />
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
                 onPress={startRecording}
-                style={styles.actionBtn}
+                style={[styles.actionBtn, { borderColor: colors.border }]}
               >
                 <Mic size={20} color="#FFF" />
               </TouchableOpacity>
@@ -878,9 +989,9 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
           style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
           onPress={() => setSelectedMessage(null)}
         >
-          <View style={{ backgroundColor: '#FFFFFF', borderTopWidth: 4, borderTopColor: '#000000', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: Platform.OS === 'ios' ? 40 : 20 }}>
+          <View style={{ backgroundColor: colors.cardBg, borderTopWidth: 4, borderTopColor: colors.border, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: Platform.OS === 'ios' ? 40 : 20 }}>
             {/* Quick Emoji Reactions */}
-            <Text style={{ color: '#000000', fontSize: 12, fontWeight: '900', marginBottom: 12, fontFamily: BRUTALIST_STYLES.fontBold }}>REACTIONS</Text>
+            <Text style={{ color: colors.textPrimary, fontSize: 12, fontWeight: '900', marginBottom: 12, fontFamily: BRUTALIST_STYLES.fontBold }}>REACTIONS</Text>
             <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 20 }}>
               {['👍', '❤️', '😂', '😮', '😢', '🙏'].map((emoji) => (
                 <TouchableOpacity
@@ -890,14 +1001,14 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
                     setSelectedMessage(null);
                     await reactToMessage(msg.id, chatId, emoji);
                   }}
-                  style={{ width: 44, height: 44, borderRadius: 8, borderWidth: 2, borderColor: '#000000', backgroundColor: BRUTALIST_COLORS.yellow, justifyContent: 'center', alignItems: 'center' }}
+                  style={{ width: 44, height: 44, borderRadius: 8, borderWidth: 2, borderColor: colors.border, backgroundColor: colors.yellow, justifyContent: 'center', alignItems: 'center' }}
                 >
                   <Text style={{ fontSize: 22 }}>{emoji}</Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            <View style={{ height: 3, backgroundColor: '#000000', marginBottom: 16 }} />
+            <View style={{ height: 3, backgroundColor: colors.border, marginBottom: 16 }} />
 
             {/* Reply */}
             <TouchableOpacity
@@ -908,8 +1019,8 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
               }}
               style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }}
             >
-              <Reply size={20} color="#000000" style={{ marginRight: 12 }} />
-              <Text style={{ color: '#000000', fontSize: 14, fontWeight: '900', fontFamily: BRUTALIST_STYLES.fontBold }}>REPLY</Text>
+              <Reply size={20} color={isDarkMode ? '#FFFFFF' : '#000000'} style={{ marginRight: 12 }} />
+              <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '900', fontFamily: BRUTALIST_STYLES.fontBold }}>REPLY</Text>
             </TouchableOpacity>
 
             {/* Copy */}
@@ -923,8 +1034,8 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
                 }}
                 style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }}
               >
-                <Copy size={20} color="#000000" style={{ marginRight: 12 }} />
-                <Text style={{ color: '#000000', fontSize: 14, fontWeight: '900', fontFamily: BRUTALIST_STYLES.fontBold }}>COPY TEXT</Text>
+                <Copy size={20} color={isDarkMode ? '#FFFFFF' : '#000000'} style={{ marginRight: 12 }} />
+                <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '900', fontFamily: BRUTALIST_STYLES.fontBold }}>COPY TEXT</Text>
               </TouchableOpacity>
             )}
 
@@ -939,8 +1050,8 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
                 }}
                 style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }}
               >
-                <Edit size={20} color="#000000" style={{ marginRight: 12 }} />
-                <Text style={{ color: '#000000', fontSize: 14, fontWeight: '900', fontFamily: BRUTALIST_STYLES.fontBold }}>EDIT MESSAGE</Text>
+                <Edit size={20} color={isDarkMode ? '#FFFFFF' : '#000000'} style={{ marginRight: 12 }} />
+                <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '900', fontFamily: BRUTALIST_STYLES.fontBold }}>EDIT MESSAGE</Text>
               </TouchableOpacity>
             )}
 
@@ -965,8 +1076,8 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
                 }}
                 style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }}
               >
-                <Trash2 size={20} color={BRUTALIST_COLORS.red} style={{ marginRight: 12 }} />
-                <Text style={{ color: BRUTALIST_COLORS.red, fontSize: 14, fontWeight: '900', fontFamily: BRUTALIST_STYLES.fontBold }}>DELETE FOR EVERYONE</Text>
+                <Trash2 size={20} color={colors.red} style={{ marginRight: 12 }} />
+                <Text style={{ color: colors.red, fontSize: 14, fontWeight: '900', fontFamily: BRUTALIST_STYLES.fontBold }}>DELETE FOR EVERYONE</Text>
               </TouchableOpacity>
             )}
 
@@ -985,8 +1096,8 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
                 }}
                 style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }}
               >
-                <Pin size={20} color="#000000" style={{ marginRight: 12 }} />
-                <Text style={{ color: '#000000', fontSize: 14, fontWeight: '900', fontFamily: BRUTALIST_STYLES.fontBold }}>
+                <Pin size={20} color={isDarkMode ? '#FFFFFF' : '#000000'} style={{ marginRight: 12 }} />
+                <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '900', fontFamily: BRUTALIST_STYLES.fontBold }}>
                   {selectedMessage?.isPinned ? 'UNPIN MESSAGE' : 'PIN MESSAGE'}
                 </Text>
               </TouchableOpacity>

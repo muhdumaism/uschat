@@ -30,10 +30,10 @@ export const SplashScreen: React.FC = () => {
         </View>
         <Text style={styles.logoText}>USCHAT</Text>
         <View style={styles.badge}>
-          <Text style={styles.badgeText}>SIGNAL PROTOCOL E2EE</Text>
+          <Text style={styles.badgeText}>END-TO-END ENCRYPTED</Text>
         </View>
       </Animated.View>
-      <Text style={styles.loaderText}>INITIALIZING ENGINE...</Text>
+      <Text style={styles.loaderText}>LOADING...</Text>
     </View>
   );
 };

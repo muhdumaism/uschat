@@ -57,25 +57,29 @@ export async function musicRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // 2. Direct Audio Stream Pipe (HTTP redirect)
+  // 2. Direct Audio Stream Pipe (No HTTP redirect)
   fastify.get('/stream', { preHandler: [authenticate] }, async (request, reply) => {
     const { uri } = z.object({ uri: z.string().url() }).parse(request.query);
     try {
-      const info = await ytdl.getInfo(uri);
-      const format = ytdl.chooseFormat(info.formats, { filter: 'audioonly', quality: 'highestaudio' });
-      if (!format || !format.url) {
-        return reply.status(404).send({ error: 'Not Found', message: 'No streaming formats found for this track' });
-      }
-      
-      // Redirect to direct YouTube audio URL
-      return reply.redirect(format.url);
+      const audioStream = ytdl(uri, {
+        filter: 'audioonly',
+        quality: 'highestaudio',
+        highWaterMark: 1 << 25, // 32MB buffer
+      });
+
+      audioStream.on('error', (err) => {
+        fastify.log.error(err, '[MusicRouter] Direct audio stream pipe failed');
+      });
+
+      reply.header('Content-Type', 'audio/mpeg');
+      return reply.send(audioStream);
     } catch (err: any) {
       fastify.log.error(err, '[MusicRouter] Stream resolution failed');
       return reply.status(500).send({ error: 'Resolution Failed', message: 'Failed to resolve audio stream link' });
     }
   });
 
-  // 3. Spotify Playlist Metadata Import
+  // 3. Spotify Metadata Import (Playlists, Albums, Tracks, Artists)
   fastify.post('/spotify-import', { preHandler: [authenticate] }, async (request, reply) => {
     const { playlistUrl } = spotifyImportSchema.parse(request.body);
     const userId = request.user.id;
@@ -88,12 +92,32 @@ export async function musicRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      // Extract Spotify Playlist ID
-      const match = /\/playlist\/([a-zA-Z0-9]+)/.exec(playlistUrl);
-      if (!match) {
-        return reply.status(400).send({ error: 'Bad Request', message: 'Invalid Spotify playlist URL' });
+      // Parse import type and ID from URL
+      const playlistMatch = /\/playlist\/([a-zA-Z0-9]+)/.exec(playlistUrl);
+      const albumMatch = /\/album\/([a-zA-Z0-9]+)/.exec(playlistUrl);
+      const trackMatch = /\/track\/([a-zA-Z0-9]+)/.exec(playlistUrl);
+      const artistMatch = /\/artist\/([a-zA-Z0-9]+)/.exec(playlistUrl);
+
+      let importType: 'playlist' | 'album' | 'track' | 'artist' | null = null;
+      let spotifyId = '';
+
+      if (playlistMatch) {
+        importType = 'playlist';
+        spotifyId = playlistMatch[1];
+      } else if (albumMatch) {
+        importType = 'album';
+        spotifyId = albumMatch[1];
+      } else if (trackMatch) {
+        importType = 'track';
+        spotifyId = trackMatch[1];
+      } else if (artistMatch) {
+        importType = 'artist';
+        spotifyId = artistMatch[1];
       }
-      const playlistId = match[1];
+
+      if (!importType) {
+        return reply.status(400).send({ error: 'Bad Request', message: 'Invalid Spotify URL. Must be a playlist, album, track, or artist URL.' });
+      }
 
       // 1. Get Spotify Client Access Token
       const tokenRes = await axios.post(
@@ -110,17 +134,48 @@ export async function musicRoutes(fastify: FastifyInstance) {
       );
       const accessToken = tokenRes.data.access_token;
 
-      // 2. Fetch Playlist Details & Tracks from Spotify API
-      const playlistRes = await axios.get(
-        `https://api.spotify.com/v1/playlists/${playlistId}`,
-        {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        }
-      );
+      let tracksList: any[] = [];
+      let playlistName = 'Imported Spotify List';
+      let coverUrl = null;
 
-      const playlistData = playlistRes.data;
-      const playlistName = playlistData.name || 'Imported Playlist';
-      const coverUrl = playlistData.images?.[0]?.url || null;
+      // 2. Fetch appropriate type metadata from Spotify APIs
+      if (importType === 'playlist') {
+        const res = await axios.get(`https://api.spotify.com/v1/playlists/${spotifyId}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        playlistName = res.data.name || 'Imported Playlist';
+        coverUrl = res.data.images?.[0]?.url || null;
+        tracksList = (res.data.tracks?.items || [])
+          .filter((item: any) => item.track)
+          .map((item: any) => item.track);
+      } else if (importType === 'album') {
+        const res = await axios.get(`https://api.spotify.com/v1/albums/${spotifyId}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        playlistName = res.data.name || 'Imported Album';
+        coverUrl = res.data.images?.[0]?.url || null;
+        tracksList = (res.data.tracks?.items || []).map((t: any) => ({
+          ...t,
+          album: { images: res.data.images, name: res.data.name },
+        }));
+      } else if (importType === 'track') {
+        const res = await axios.get(`https://api.spotify.com/v1/tracks/${spotifyId}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        playlistName = res.data.name || 'Imported Track';
+        coverUrl = res.data.album?.images?.[0]?.url || null;
+        tracksList = [res.data];
+      } else if (importType === 'artist') {
+        const res = await axios.get(`https://api.spotify.com/v1/artists/${spotifyId}/top-tracks?market=US`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        const artistMeta = await axios.get(`https://api.spotify.com/v1/artists/${spotifyId}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        playlistName = `${artistMeta.data.name || 'Artist'} Top Tracks`;
+        coverUrl = artistMeta.data.images?.[0]?.url || null;
+        tracksList = res.data.tracks || [];
+      }
 
       // 3. Create Playlist Record in DB
       const dbPlaylist = await prisma.playlist.create({
@@ -131,21 +186,18 @@ export async function musicRoutes(fastify: FastifyInstance) {
         },
       });
 
-      // 4. Save tracks list
-      const tracksItems = playlistData.tracks?.items || [];
+      // 4. Save tracks list to DB
       const tracksToCreate = [];
+      for (let i = 0; i < tracksList.length; i++) {
+        const track = tracksList[i];
+        if (!track) continue;
 
-      for (let i = 0; i < tracksItems.length; i++) {
-        const item = tracksItems[i];
-        if (!item.track) continue;
+        const trackName = track.name;
+        const artistName = track.artists?.map((a: any) => a.name).join(', ') || 'Unknown';
+        const albumName = track.album?.name || null;
+        const durationSecs = Math.floor((track.duration_ms || 0) / 1000);
+        const trackCover = track.album?.images?.[0]?.url || coverUrl;
 
-        const trackName = item.track.name;
-        const artistName = item.track.artists?.map((a: any) => a.name).join(', ') || 'Unknown';
-        const albumName = item.track.album?.name || null;
-        const durationSecs = Math.floor((item.track.duration_ms || 0) / 1000);
-        const trackCover = item.track.album?.images?.[0]?.url || null;
-
-        // Construct search query string for YouTube resolving later
         const searchQuery = `${trackName} ${artistName}`;
         const searchUri = `https://www.youtube.com/results?search_query=${encodeURIComponent(searchQuery)}`;
 
@@ -156,7 +208,7 @@ export async function musicRoutes(fastify: FastifyInstance) {
           album: albumName,
           duration: durationSecs,
           coverUrl: trackCover,
-          trackUri: searchUri, // Saved search string acting as URI fallback
+          trackUri: searchUri,
           position: i,
         });
       }
@@ -178,7 +230,7 @@ export async function musicRoutes(fastify: FastifyInstance) {
       fastify.log.error(err, '[MusicRouter] Spotify import error');
       return reply.status(500).send({
         error: 'Import Failed',
-        message: err.response?.data?.error?.message || 'Failed to import Spotify playlist',
+        message: err.response?.data?.error?.message || 'Failed to import Spotify item',
       });
     }
   });

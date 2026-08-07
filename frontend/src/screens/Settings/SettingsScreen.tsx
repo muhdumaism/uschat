@@ -77,13 +77,13 @@ export const SettingsScreen: React.FC<any> = ({ navigation }) => {
         <BrutalistCard accentColor={colors.cardBg} padding={12} style={styles.sectionCard}>
           <TouchableOpacity
             activeOpacity={0.8}
-            onPress={() => Alert.alert('Security Fingerprint', 'Signal E2EE Handshake Verified.')}
+            onPress={() => Alert.alert('Security', 'Encryption is active and verified.')}
             style={styles.settingItem}
           >
             <Shield size={20} color={colors.textPrimary} style={{ marginRight: 12 }} />
             <View style={styles.textMeta}>
               <Text style={[styles.itemTitle, { color: colors.textPrimary }]}>END-TO-END ENCRYPTION</Text>
-              <Text style={[styles.itemSub, { color: colors.textSecondary }]}>Local cryptographic Signal protocol state.</Text>
+              <Text style={[styles.itemSub, { color: colors.textSecondary }]}>Manage your encryption keys.</Text>
             </View>
           </TouchableOpacity>
 
@@ -186,7 +186,7 @@ export const SettingsScreen: React.FC<any> = ({ navigation }) => {
           accentColor={colors.red}
         >
           <LogOut size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
-          <Text style={styles.logoutText}>DISCONNECT ACTIVE SESSION</Text>
+          <Text style={styles.logoutText}>LOG OUT</Text>
         </BrutalistButton>
 
       </ScrollView>

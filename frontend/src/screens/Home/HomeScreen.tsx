@@ -105,7 +105,7 @@ export const HomeScreen: React.FC<any> = ({ navigation }) => {
           />
           <View>
             <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>USCHAT</Text>
-            <Text style={[styles.headerSubtitle, { color: colors.textMuted }]}>SECURED NODE</Text>
+            <Text style={[styles.headerSubtitle, { color: colors.textMuted }]}>ONLINE</Text>
           </View>
         </View>
 

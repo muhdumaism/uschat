@@ -161,6 +161,37 @@ async function chatRoutes(fastify) {
         });
         return reply.send({ success: true, isArchived });
     });
+    // Get Group Details
+    fastify.get('/group/:chatId', { preHandler: [auth_middleware_1.authenticate] }, async (request, reply) => {
+        const { chatId } = request.params;
+        const membership = await client_1.prisma.chatMember.findUnique({
+            where: { chatId_userId: { chatId, userId: request.user.id } },
+        });
+        if (!membership) {
+            return reply.status(403).send({ error: 'Forbidden', message: 'You are not a member of this chat' });
+        }
+        const chat = await client_1.prisma.chat.findUnique({
+            where: { id: chatId },
+            include: {
+                members: {
+                    include: {
+                        user: {
+                            select: {
+                                id: true,
+                                username: true,
+                                displayName: true,
+                                avatarUrl: true,
+                            },
+                        },
+                    },
+                },
+            },
+        });
+        if (!chat || chat.type !== 'GROUP') {
+            return reply.status(404).send({ error: 'Not Found', message: 'Group chat not found' });
+        }
+        return reply.send(chat);
+    });
     // Edit Group Settings
     fastify.patch('/group/:chatId', { preHandler: [auth_middleware_1.authenticate] }, async (request, reply) => {
         const { chatId } = request.params;

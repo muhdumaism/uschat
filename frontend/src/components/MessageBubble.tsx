@@ -7,13 +7,19 @@ import { ChatMessage } from '../store/chatStore';
 import { VoiceMessageBubble } from './VoiceMessageBubble';
 import { MediaCacheService } from '../services/mediaCacheService';
 
+const inMemoryCache = new Map<string, string>();
+
 const CachedImage: React.FC<{ uri: string; style: any; blurHash?: string | null }> = ({ uri, style, blurHash }) => {
-  const [sourceUri, setSourceUri] = useState<string | null>(null);
+  const [sourceUri, setSourceUri] = useState<string | null>(inMemoryCache.get(uri) || null);
 
   useEffect(() => {
+    if (inMemoryCache.has(uri)) {
+      return;
+    }
     let isMounted = true;
     const resolveUri = async () => {
       const cached = await MediaCacheService.getCachedUri(uri);
+      inMemoryCache.set(uri, cached);
       if (isMounted) {
         setSourceUri(cached);
       }
@@ -33,10 +39,16 @@ const CachedImage: React.FC<{ uri: string; style: any; blurHash?: string | null 
         />
       );
     }
-    return <View style={[style, { backgroundColor: '#EEEEEE', borderWidth: 2, borderColor: '#000000' }]} />;
+    return <View style={[style, { backgroundColor: '#E6E6E6' }]} />;
   }
 
-  return <Image source={{ uri: sourceUri }} style={style} resizeMode="cover" />;
+  return (
+    <Image
+      source={{ uri: sourceUri }}
+      style={style}
+      resizeMode="cover"
+    />
+  );
 };
 
 export interface MessageBubbleProps {
@@ -62,7 +74,7 @@ const getReplyText = (msg: any) => {
   }
 };
 
-export const MessageBubble: React.FC<MessageBubbleProps> = ({
+export const MessageBubble = React.memo<MessageBubbleProps>(({
   message,
   isMe,
   onOpenViewOnce,
@@ -306,7 +318,28 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   }
 
   return bubbleContent;
-};
+},
+  (prevProps, nextProps) => {
+    if (prevProps.isMe !== nextProps.isMe) return false;
+    if (prevProps.message.id !== nextProps.message.id) return false;
+    if (prevProps.message.decryptedText !== nextProps.message.decryptedText) return false;
+    if (prevProps.message.isViewed !== nextProps.message.isViewed) return false;
+    if (prevProps.message.isDeletedForEveryone !== nextProps.message.isDeletedForEveryone) return false;
+
+    const prevReactions = prevProps.message.reactions || [];
+    const nextReactions = nextProps.message.reactions || [];
+    if (prevReactions.length !== nextReactions.length) return false;
+    for (let i = 0; i < prevReactions.length; i++) {
+      if (
+        prevReactions[i].userId !== nextReactions[i].userId ||
+        prevReactions[i].emoji !== nextReactions[i].emoji
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }
+);
 
 const styles = StyleSheet.create({
   myContainer: {
@@ -435,9 +468,11 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 6,
     marginBottom: 8,
+    alignSelf: 'flex-start',
+    minWidth: 120,
+    maxWidth: '100%',
   },
   replyContent: {
-    flex: 1,
   },
   replySender: {
     fontWeight: '900',

@@ -6,7 +6,16 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.config = void 0;
 const dotenv_1 = __importDefault(require("dotenv"));
 const path_1 = __importDefault(require("path"));
-dotenv_1.default.config({ path: path_1.default.join(__dirname, '../../.env') });
+const envPath = path_1.default.join(__dirname, '../../.env');
+const result = dotenv_1.default.config({ path: envPath });
+console.log(`[Dotenv] Attempting to load .env from: ${envPath}`);
+if (result.error) {
+    console.error('[Dotenv] ❌ Error loading .env file:', result.error.message);
+}
+else {
+    console.log('[Dotenv] ✅ Loaded .env file successfully. Keys found:', Object.keys(result.parsed || {}));
+}
+console.log('[Dotenv] DATABASE_URL in process.env:', process.env.DATABASE_URL ? 'DEFINED (starts with: ' + process.env.DATABASE_URL.substring(0, 8) + '...)' : 'UNDEFINED ❌');
 exports.config = {
     port: parseInt(process.env.PORT || '4000', 10),
     host: process.env.HOST || '0.0.0.0',

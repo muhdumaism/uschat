@@ -138,6 +138,40 @@ export function registerWebSocketRoutes(fastify: FastifyInstance) {
               });
               break;
 
+            case 'CALL_OFFER':
+              WebSocketManager.sendToUser(payload.targetId, 'CALL_OFFER', {
+                callerId: decoded.id,
+                callerName: payload.callerName,
+                sdp: payload.sdp,
+                chatId: payload.chatId,
+              });
+              break;
+
+            case 'CALL_ANSWER':
+              WebSocketManager.sendToUser(payload.targetId, 'CALL_ANSWER', {
+                receiverId: decoded.id,
+                sdp: payload.sdp,
+              });
+              break;
+
+            case 'ICE_CANDIDATE':
+              WebSocketManager.sendToUser(payload.targetId, 'ICE_CANDIDATE', {
+                candidate: payload.candidate,
+              });
+              break;
+
+            case 'CALL_HANGUP':
+              WebSocketManager.sendToUser(payload.targetId, 'CALL_HANGUP', {});
+              break;
+
+            case 'CALL_RINGING':
+              WebSocketManager.sendToUser(payload.targetId, 'CALL_RINGING', {});
+              break;
+
+            case 'CALL_REJECT':
+              WebSocketManager.sendToUser(payload.targetId, 'CALL_REJECT', {});
+              break;
+
             case 'READ_RECEIPT':
               try {
                 await prisma.message.updateMany({

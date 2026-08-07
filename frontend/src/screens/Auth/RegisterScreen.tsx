@@ -12,7 +12,7 @@ import {
   Image,
 } from 'react-native';
 import { Mail, Lock, User, ShieldAlert } from 'lucide-react-native';
-import { BRUTALIST_COLORS, BRUTALIST_STYLES } from '../../theme/brutalistTheme';
+import { BRUTALIST_COLORS, BRUTALIST_STYLES, useBrutalistTheme } from '../../theme/brutalistTheme';
 import { BrutalistCard } from '../../components/BrutalistCard';
 import { BrutalistButton } from '../../components/BrutalistButton';
 import { BrutalistTextInput } from '../../components/BrutalistTextInput';
@@ -20,6 +20,7 @@ import { apiClient } from '../../api/client';
 import { useAuthStore } from '../../store/authStore';
 
 export const RegisterScreen: React.FC<any> = ({ navigation }) => {
+  const { colors, isDarkMode } = useBrutalistTheme();
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -65,22 +66,22 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
     >
-      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
 
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.statusBarSpacer} />
 
         <View style={styles.cardWrapper}>
           <BrutalistCard
-            accentColor={BRUTALIST_COLORS.cardBg}
+            accentColor={colors.cardBg}
             padding={24}
             style={styles.card}
           >
             {/* Header branding */}
             <View style={styles.logoRow}>
-              <View style={styles.logoBox}>
+              <View style={[styles.logoBox, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
                 <Image
                   source={require('../../../assets/uschatlogo-trans.png')}
                   style={styles.logoImage}
@@ -88,28 +89,29 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
                 />
               </View>
               <View style={styles.brandInfo}>
-                <Text style={styles.brandTitle}>USCHAT SECURE</Text>
-                <Text style={styles.brandSub}>ESTABLISH CLIENT NODE</Text>
+                <Text style={[styles.brandTitle, { color: colors.textPrimary }]}>USCHAT SECURE</Text>
+                <Text style={[styles.brandSub, { color: colors.textSecondary }]}>CREATE YOUR ACCOUNT</Text>
               </View>
             </View>
 
             {/* Info box banner */}
             <BrutalistCard
-              accentColor={BRUTALIST_COLORS.blue}
+              accentColor={colors.blue}
               padding={10}
               style={styles.banner}
               borderRadius={BRUTALIST_STYLES.borderRadiusSmall}
             >
-              <Text style={styles.bannerText}>
-                ENTER A VALID EMAIL AND UNIQUE ID TO SPIN UP AN E2EE MESSAGING IDENTITY.
+              <Text style={[styles.bannerText, { color: '#FFFFFF' }]}>
+                Enter your email and pick a username to get started.
               </Text>
             </BrutalistCard>
 
             {/* Input form */}
             <View style={styles.form}>
-              <Text style={styles.label}>EMAIL ADDRESS *</Text>
+              <Text style={[styles.label, { color: colors.textPrimary }]}>EMAIL ADDRESS *</Text>
               <BrutalistTextInput
                 placeholder="client@uschat.space"
+                placeholderTextColor={isDarkMode ? '#666666' : '#888888'}
                 value={email}
                 onChangeText={(val) => {
                   setEmail(val);
@@ -117,49 +119,52 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
                 }}
                 autoCapitalize="none"
                 keyboardType="email-address"
-                icon={<Mail size={16} color="#000000" />}
+                icon={<Mail size={16} color={isDarkMode ? '#FFFFFF' : '#000000'} />}
                 containerStyle={{ marginBottom: 16 }}
               />
 
-              <Text style={styles.label}>USERNAME HANDLE *</Text>
+              <Text style={[styles.label, { color: colors.textPrimary }]}>USERNAME HANDLE *</Text>
               <BrutalistTextInput
-                placeholder="client_node"
+                placeholder="username"
+                placeholderTextColor={isDarkMode ? '#666666' : '#888888'}
                 value={username}
                 onChangeText={(val) => {
                   setUsername(val);
                   setError('');
                 }}
                 autoCapitalize="none"
-                icon={<User size={16} color="#000000" />}
+                icon={<User size={16} color={isDarkMode ? '#FFFFFF' : '#000000'} />}
                 containerStyle={{ marginBottom: 16 }}
               />
 
-              <Text style={styles.label}>DISPLAY NAME (OPTIONAL)</Text>
+              <Text style={[styles.label, { color: colors.textPrimary }]}>DISPLAY NAME (OPTIONAL)</Text>
               <BrutalistTextInput
-                placeholder="CLIENT CORE"
+                placeholder="Your Name"
+                placeholderTextColor={isDarkMode ? '#666666' : '#888888'}
                 value={displayName}
                 onChangeText={setDisplayName}
-                icon={<User size={16} color="#000000" />}
+                icon={<User size={16} color={isDarkMode ? '#FFFFFF' : '#000000'} />}
                 containerStyle={{ marginBottom: 16 }}
               />
 
-              <Text style={styles.label}>SECURITY PASSWORD *</Text>
+              <Text style={[styles.label, { color: colors.textPrimary }]}>PASSWORD *</Text>
               <BrutalistTextInput
                 placeholder="••••••••••••"
+                placeholderTextColor={isDarkMode ? '#666666' : '#888888'}
                 value={password}
                 onChangeText={(val) => {
                   setPassword(val);
                   setError('');
                 }}
                 secureTextEntry
-                icon={<Lock size={16} color="#000000" />}
+                icon={<Lock size={16} color={isDarkMode ? '#FFFFFF' : '#000000'} />}
                 containerStyle={{ marginBottom: 20 }}
               />
 
               {error ? (
-                <View style={styles.errorContainer}>
-                  <ShieldAlert size={16} color={BRUTALIST_COLORS.red} style={{ marginRight: 8 }} />
-                  <Text style={styles.errorText}>{error}</Text>
+                <View style={[styles.errorContainer, { backgroundColor: isDarkMode ? 'rgba(239, 68, 68, 0.1)' : '#FFEEEE', borderColor: colors.red }]}>
+                  <ShieldAlert size={16} color={colors.red} style={{ marginRight: 8 }} />
+                  <Text style={[styles.errorText, { color: colors.red }]}>{error}</Text>
                 </View>
               ) : null}
             </View>
@@ -171,7 +176,7 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
                 onPress={handleRegister}
                 disabled={loading}
                 style={styles.btn}
-                accentColor={BRUTALIST_COLORS.yellow}
+                accentColor={colors.yellow}
               />
               <BrutalistButton
                 title="CLEAR"
@@ -183,19 +188,19 @@ export const RegisterScreen: React.FC<any> = ({ navigation }) => {
                   setError('');
                 }}
                 style={styles.btn}
-                accentColor={BRUTALIST_COLORS.blue}
+                accentColor={colors.blue}
                 textStyle={{ color: '#FFFFFF' }}
               />
             </View>
 
             {/* Switch to login */}
-            <View style={styles.footer}>
+            <View style={[styles.footer, { borderColor: colors.border }]}>
               <TouchableOpacity
                 onPress={() => navigation.navigate('Login')}
                 style={styles.footerLink}
               >
-                <Text style={styles.footerText}>
-                  ALREADY AN IDENTITY NODE? <Text style={styles.highlight}>SIGN IN</Text>
+                <Text style={[styles.footerText, { color: colors.textSecondary }]}>
+                  Already have an account? <Text style={[styles.highlight, { color: colors.blue }]}>SIGN IN</Text>
                 </Text>
               </TouchableOpacity>
             </View>

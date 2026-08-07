@@ -13,7 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import { ArrowLeft, User, UserCheck, ShieldCheck, Users, Edit3, Trash2, CheckCircle, Pin } from 'lucide-react-native';
-import { BRUTALIST_COLORS, BRUTALIST_STYLES } from '../../theme/brutalistTheme';
+import { BRUTALIST_COLORS, BRUTALIST_STYLES, useBrutalistTheme } from '../../theme/brutalistTheme';
 import { BrutalistCard } from '../../components/BrutalistCard';
 import { BrutalistButton } from '../../components/BrutalistButton';
 import { BrutalistTextInput } from '../../components/BrutalistTextInput';
@@ -22,6 +22,7 @@ import { apiClient } from '../../api/client';
 import { useAuthStore } from '../../store/authStore';
 
 export const GroupSettingsScreen: React.FC<any> = ({ route, navigation }) => {
+  const { colors, isDarkMode } = useBrutalistTheme();
   const { chatId, groupName } = route.params;
   const currentUser = useAuthStore((s) => s.user);
 
@@ -83,7 +84,7 @@ export const GroupSettingsScreen: React.FC<any> = ({ route, navigation }) => {
         adminsOnlyMessaging: adminsOnlyMsg,
         adminsOnlyInfoEdit: adminsOnlyEdit,
       });
-      Alert.alert('SUCCESS', 'GROUP SETTINGS SECURED.');
+      Alert.alert('SUCCESS', 'Group settings saved.');
       fetchDetails();
     } catch (e: any) {
       Alert.alert('ERROR', e.response?.data?.message?.toUpperCase() || 'FAILED TO SAVE SETTINGS.');
@@ -97,7 +98,7 @@ export const GroupSettingsScreen: React.FC<any> = ({ route, navigation }) => {
     try {
       setInviting(true);
       await apiClient.post(`/chats/group/${chatId}/members`, { username: inviteUsername.trim() });
-      Alert.alert('SUCCESS', `ADDED @${inviteUsername.toLowerCase()} TO SECURED GROUP.`);
+      Alert.alert('SUCCESS', `Added @${inviteUsername.toLowerCase()} to the group.`);
       setInviteUsername('');
       fetchDetails();
     } catch (e: any) {
@@ -123,7 +124,7 @@ export const GroupSettingsScreen: React.FC<any> = ({ route, navigation }) => {
   const handleRemoveMember = async (memberUserId: string) => {
     try {
       await apiClient.delete(`/chats/group/${chatId}/members/${memberUserId}`);
-      Alert.alert('SUCCESS', 'MEMBER DISCONNECTED FROM GROUP ROUTE.');
+      Alert.alert('SUCCESS', 'Member removed from group.');
       fetchDetails();
     } catch (e: any) {
       Alert.alert('ERROR', e.response?.data?.message?.toUpperCase() || 'FAILED TO REMOVE MEMBER.');
@@ -131,7 +132,7 @@ export const GroupSettingsScreen: React.FC<any> = ({ route, navigation }) => {
   };
 
   const handleLeaveGroup = async () => {
-    Alert.alert('LEAVE GROUP', 'ARE YOU SURE YOU WANT TO DISCONNECT FROM THIS GROUP ROUTE?', [
+    Alert.alert('LEAVE GROUP', 'ARE YOU SURE YOU WANT TO LEAVE THIS GROUP?', [
       { text: 'CANCEL', style: 'cancel' },
       {
         text: 'LEAVE',
@@ -150,8 +151,8 @@ export const GroupSettingsScreen: React.FC<any> = ({ route, navigation }) => {
 
   if (loading || !chatDetails) {
     return (
-      <View style={[styles.container, styles.center]}>
-        <ActivityIndicator size="large" color="#000000" />
+      <View style={[styles.container, styles.center, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.textPrimary} />
       </View>
     );
   }
@@ -161,40 +162,40 @@ export const GroupSettingsScreen: React.FC<any> = ({ route, navigation }) => {
   const isSelfAdmin = selfMember?.role === 'ADMIN' || selfMember?.role === 'OWNER';
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
       <View style={styles.statusBarSpacer} />
 
       {/* Header Bar */}
       <View style={styles.header}>
-        <BrutalistButton onPress={() => navigation.goBack()} style={styles.backBtn} accentColor={BRUTALIST_COLORS.yellow}>
-          <ArrowLeft size={18} color="#000000" />
+        <BrutalistButton onPress={() => navigation.goBack()} style={styles.backBtn} accentColor={colors.yellow}>
+          <ArrowLeft size={18} color={isDarkMode ? '#FFFFFF' : '#000000'} />
         </BrutalistButton>
-        <Text style={styles.headerTitle}>GROUP CONFIG</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>GROUP CONFIG</Text>
         <View style={{ width: 36 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         
         {/* Profile/Metadata section */}
-        <BrutalistCard accentColor="#FFFFFF" padding={16} style={styles.metaCard}>
+        <BrutalistCard accentColor={colors.cardBg} padding={16} style={styles.metaCard}>
           <View style={styles.avatarRow}>
-            <View style={styles.avatarBezel}>
+            <View style={[styles.avatarBezel, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
               <Avatar name={groupName} uri={chatDetails.avatar} size={72} />
             </View>
             <View style={styles.groupInfoBox}>
-              <Text style={styles.groupTitle}>{groupName.toUpperCase()}</Text>
-              <Text style={styles.subText}>
-                {chatDetails.members?.length || 0} SECURED MEMBER NODES
+              <Text style={[styles.groupTitle, { color: colors.textPrimary }]}>{groupName.toUpperCase()}</Text>
+              <Text style={[styles.subText, { color: colors.textSecondary }]}>
+                {chatDetails.members?.length || 0} MEMBERS
               </Text>
             </View>
           </View>
         </BrutalistCard>
 
         {/* Configurations Box */}
-        <Text style={styles.sectionTitle}>GROUP RULES</Text>
-        <BrutalistCard accentColor="#FFFFFF" padding={12} style={styles.metaCard}>
-          <Text style={styles.label}>DESCRIPTION / RULESET</Text>
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>GROUP RULES</Text>
+        <BrutalistCard accentColor={colors.cardBg} padding={12} style={styles.metaCard}>
+          <Text style={[styles.label, { color: colors.textPrimary }]}>DESCRIPTION / RULESET</Text>
           <BrutalistTextInput
             placeholder="ENTER DESCRIPTION..."
             value={description}
@@ -206,14 +207,14 @@ export const GroupSettingsScreen: React.FC<any> = ({ route, navigation }) => {
           {isSelfAdmin && (
             <View style={styles.switchRow}>
               <View style={styles.switchMeta}>
-                <Text style={styles.switchTitle}>ADMINS-ONLY MESSAGING</Text>
-                <Text style={styles.switchSub}>Restrict messaging privileges to admins.</Text>
+                <Text style={[styles.switchTitle, { color: colors.textPrimary }]}>ADMINS-ONLY MESSAGING</Text>
+                <Text style={[styles.switchSub, { color: colors.textSecondary }]}>Restrict messaging privileges to admins.</Text>
               </View>
               <Switch
                 value={adminsOnlyMsg}
                 onValueChange={setAdminsOnlyMsg}
-                trackColor={{ false: '#CCCCCC', true: '#000000' }}
-                thumbColor={adminsOnlyMsg ? BRUTALIST_COLORS.yellow : '#FFFFFF'}
+                trackColor={{ false: '#CCCCCC', true: colors.border }}
+                thumbColor={adminsOnlyMsg ? colors.yellow : '#FFFFFF'}
               />
             </View>
           )}
@@ -221,14 +222,14 @@ export const GroupSettingsScreen: React.FC<any> = ({ route, navigation }) => {
           {isSelfAdmin && (
             <View style={[styles.switchRow, { marginTop: 10 }]}>
               <View style={styles.switchMeta}>
-                <Text style={styles.switchTitle}>ADMINS-ONLY DETAILS EDIT</Text>
-                <Text style={styles.switchSub}>Restrict group description editing to admins.</Text>
+                <Text style={[styles.switchTitle, { color: colors.textPrimary }]}>ADMINS-ONLY DETAILS EDIT</Text>
+                <Text style={[styles.switchSub, { color: colors.textSecondary }]}>Restrict group description editing to admins.</Text>
               </View>
               <Switch
                 value={adminsOnlyEdit}
                 onValueChange={setAdminsOnlyEdit}
-                trackColor={{ false: '#CCCCCC', true: '#000000' }}
-                thumbColor={adminsOnlyEdit ? BRUTALIST_COLORS.yellow : '#FFFFFF'}
+                trackColor={{ false: '#CCCCCC', true: colors.border }}
+                thumbColor={adminsOnlyEdit ? colors.yellow : '#FFFFFF'}
               />
             </View>
           )}
@@ -238,7 +239,7 @@ export const GroupSettingsScreen: React.FC<any> = ({ route, navigation }) => {
               title={savingSettings ? "SECURING..." : "SAVE GROUP RULES"}
               onPress={handleSaveSettings}
               style={{ marginTop: 12 }}
-              accentColor={BRUTALIST_COLORS.yellow}
+              accentColor={colors.yellow}
               disabled={savingSettings}
             />
           )}
@@ -247,8 +248,8 @@ export const GroupSettingsScreen: React.FC<any> = ({ route, navigation }) => {
         {/* Member Add Card */}
         {isSelfAdmin && (
           <>
-            <Text style={styles.sectionTitle}>INVITE NEW NODE</Text>
-            <BrutalistCard accentColor="#FFFFFF" padding={12} style={styles.metaCard}>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>ADD MEMBER</Text>
+            <BrutalistCard accentColor={colors.cardBg} padding={12} style={styles.metaCard}>
               <View style={styles.row}>
                 <BrutalistTextInput
                   placeholder="USERNAME..."
@@ -259,7 +260,7 @@ export const GroupSettingsScreen: React.FC<any> = ({ route, navigation }) => {
                 <BrutalistButton
                   onPress={handleAddMember}
                   title={inviting ? "ADDING..." : "INVITE"}
-                  accentColor={BRUTALIST_COLORS.pink}
+                  accentColor={colors.pink}
                   disabled={inviting}
                 />
               </View>
@@ -268,40 +269,40 @@ export const GroupSettingsScreen: React.FC<any> = ({ route, navigation }) => {
         )}
 
         {/* Pins Section */}
-        <Text style={styles.sectionTitle}>PINNED MESSAGES ({pinnedMessages.length})</Text>
-        <BrutalistCard accentColor="#FFFFFF" padding={12} style={styles.metaCard}>
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>PINNED MESSAGES ({pinnedMessages.length})</Text>
+        <BrutalistCard accentColor={colors.cardBg} padding={12} style={styles.metaCard}>
           {loadingPins ? (
-            <ActivityIndicator color="#000" />
+            <ActivityIndicator color={colors.textPrimary} />
           ) : (
             pinnedMessages.map((msg) => (
               <View key={msg.id} style={styles.pinRow}>
-                <Pin size={14} color="#000" style={{ marginRight: 8 }} />
-                <Text style={styles.pinText} numberOfLines={1}>
+                <Pin size={14} color={colors.textPrimary} style={{ marginRight: 8 }} />
+                <Text style={[styles.pinText, { color: colors.textPrimary }]} numberOfLines={1}>
                   {msg.decryptedText || msg.encryptedContent}
                 </Text>
               </View>
             ))
           )}
           {!loadingPins && pinnedMessages.length === 0 && (
-            <Text style={styles.emptySubText}>NO PINNED MESSAGES IN THIS GROUP.</Text>
+            <Text style={[styles.emptySubText, { color: colors.textSecondary }]}>NO PINNED MESSAGES IN THIS GROUP.</Text>
           )}
         </BrutalistCard>
 
         {/* Participant list card */}
-        <Text style={styles.sectionTitle}>SECURED MEMBER LIST</Text>
-        <BrutalistCard accentColor="#FFFFFF" padding={12} style={styles.metaCard}>
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>MEMBERS</Text>
+        <BrutalistCard accentColor={colors.cardBg} padding={12} style={styles.metaCard}>
           {chatDetails.members?.map((m: any) => {
             const isAdmin = m.role === 'ADMIN' || m.role === 'OWNER';
             const isSelf = m.userId === currentUser?.id;
             
             return (
-              <View key={m.id} style={styles.memberItem}>
+              <View key={m.id} style={[styles.memberItem, { borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}>
                 <Avatar name={m.user?.displayName || m.user?.username} uri={m.user?.avatarUrl} size={36} />
                 <View style={styles.memberMeta}>
-                  <Text style={styles.memberName}>
+                  <Text style={[styles.memberName, { color: colors.textPrimary }]}>
                     {(m.user?.displayName || m.user?.username).toUpperCase()}
                   </Text>
-                  <Text style={styles.memberRole}>
+                  <Text style={[styles.memberRole, { color: colors.textSecondary }]}>
                     ROLE: {m.role} {isSelf && '(YOU)'}
                   </Text>
                 </View>
@@ -312,21 +313,21 @@ export const GroupSettingsScreen: React.FC<any> = ({ route, navigation }) => {
                       <BrutalistButton
                         onPress={() => handleUpdateRole(m.userId, 'MEMBER')}
                         style={styles.memberActionBtn}
-                        accentColor={BRUTALIST_COLORS.blue}
+                        accentColor={colors.blue}
                         title="DEMOTE"
                       />
                     ) : (
                       <BrutalistButton
                         onPress={() => handleUpdateRole(m.userId, 'ADMIN')}
                         style={styles.memberActionBtn}
-                        accentColor={BRUTALIST_COLORS.yellow}
-                        title="ADMIN"
+                        accentColor={colors.yellow}
+                        title="PROMOTE"
                       />
                     )}
                     <BrutalistButton
                       onPress={() => handleRemoveMember(m.userId)}
                       style={styles.memberActionBtn}
-                      accentColor={BRUTALIST_COLORS.red}
+                      accentColor={colors.red}
                       textStyle={{ color: '#FFFFFF' }}
                       title="KICK"
                     />
@@ -341,9 +342,9 @@ export const GroupSettingsScreen: React.FC<any> = ({ route, navigation }) => {
         <BrutalistButton
           onPress={handleLeaveGroup}
           style={styles.leaveBtn}
-          accentColor={BRUTALIST_COLORS.red}
+          accentColor={colors.red}
         >
-          <Text style={styles.leaveText}>DISCONNECT FROM GROUP CHANNEL</Text>
+          <Text style={styles.leaveText}>LEAVE GROUP</Text>
         </BrutalistButton>
 
       </ScrollView>

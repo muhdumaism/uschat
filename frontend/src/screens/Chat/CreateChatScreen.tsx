@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, Platform, StatusBar } from 'react-native';
 import { ArrowLeft, Search, UserPlus, Users, CheckSquare, Square } from 'lucide-react-native';
-import { BRUTALIST_COLORS, BRUTALIST_STYLES } from '../../theme/brutalistTheme';
+import { BRUTALIST_COLORS, BRUTALIST_STYLES, useBrutalistTheme } from '../../theme/brutalistTheme';
 import { BrutalistCard } from '../../components/BrutalistCard';
 import { BrutalistButton } from '../../components/BrutalistButton';
 import { BrutalistTextInput } from '../../components/BrutalistTextInput';
@@ -10,6 +10,7 @@ import { apiClient } from '../../api/client';
 import { useChatStore } from '../../store/chatStore';
 
 export const CreateChatScreen: React.FC<any> = ({ navigation }) => {
+  const { colors, isDarkMode } = useBrutalistTheme();
   const [activeTab, setActiveTab] = useState<'direct' | 'group'>('direct');
   
   // Search details
@@ -22,10 +23,43 @@ export const CreateChatScreen: React.FC<any> = ({ navigation }) => {
   const [selectedUsernames, setSelectedUsernames] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
 
-  const { setActiveChat, fetchChats } = useChatStore();
+  const { setActiveChat, fetchChats, chats } = useChatStore();
+
+  React.useEffect(() => {
+    if (activeTab === 'group') {
+      const allFriends = chats
+        .filter((c) => c.type === 'DIRECT')
+        .map((c) => ({
+          id: c.id,
+          username: c.peerUsername || '',
+          displayName: c.name,
+          avatarUrl: c.avatar,
+        }))
+        .filter((f) => f.username !== '');
+
+      if (query.trim()) {
+        const filtered = allFriends.filter(
+          (f) =>
+            f.displayName.toLowerCase().includes(query.toLowerCase()) ||
+            f.username.toLowerCase().includes(query.toLowerCase())
+        );
+        setResults(filtered);
+      } else {
+        setResults(allFriends);
+      }
+    } else {
+      if (!query.trim()) {
+        setResults([]);
+      }
+    }
+  }, [activeTab, query, chats]);
 
   const handleSearch = async (text: string) => {
     setQuery(text);
+    if (activeTab === 'group') {
+      return;
+    }
+
     if (text.length < 2) {
       setResults([]);
       return;
@@ -62,7 +96,7 @@ export const CreateChatScreen: React.FC<any> = ({ navigation }) => {
 
   const handleCreateGroup = async () => {
     if (!groupName.trim()) {
-      Alert.alert('VALIDATION ERROR', 'PLEASE ENTER A SECURED GROUP NAME.');
+      Alert.alert('VALIDATION ERROR', 'Please enter a group name.');
       return;
     }
     if (selectedUsernames.length === 0) {
@@ -80,40 +114,41 @@ export const CreateChatScreen: React.FC<any> = ({ navigation }) => {
       setActiveChat(res.data.id);
       navigation.replace('Chat', { chatId: res.data.id, name: groupName });
     } catch (err: any) {
-      Alert.alert('ERROR', err.response?.data?.message?.toUpperCase() || 'FAILED TO ESTABLISH GROUP ROUTE');
+      Alert.alert('ERROR', err.response?.data?.message?.toUpperCase() || 'FAILED TO CREATE GROUP');
     } finally {
       setCreating(false);
     }
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
       <View style={styles.statusBarSpacer} />
       
       {/* Header Bar */}
       <View style={styles.header}>
-        <BrutalistButton onPress={() => navigation.goBack()} style={styles.backBtn} accentColor={BRUTALIST_COLORS.yellow}>
-          <ArrowLeft size={18} color="#000000" />
+        <BrutalistButton onPress={() => navigation.goBack()} style={styles.backBtn} accentColor={colors.yellow}>
+          <ArrowLeft size={18} color={isDarkMode ? '#FFFFFF' : '#000000'} />
         </BrutalistButton>
-        <Text style={styles.headerTitle}>NEW ROUTE</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>NEW CHAT</Text>
         <View style={{ width: 36 }} />
       </View>
 
       {/* Tab Buttons */}
-      <View style={styles.tabBar}>
+      <View style={[styles.tabBar, { borderColor: colors.border }]}>
         <TouchableOpacity
           onPress={() => { setActiveTab('direct'); setResults([]); setQuery(''); }}
           style={[
             styles.tab,
             {
-              backgroundColor: activeTab === 'direct' ? BRUTALIST_COLORS.yellow : '#FFFFFF',
+              backgroundColor: activeTab === 'direct' ? colors.yellow : colors.cardBg,
               borderRightWidth: BRUTALIST_STYLES.borderWidthThin,
+              borderRightColor: colors.border,
             }
           ]}
         >
-          <UserPlus size={16} color="#000000" style={{ marginRight: 6 }} />
-          <Text style={styles.tabText}>DIRECT E2EE</Text>
+          <UserPlus size={16} color={isDarkMode ? '#FFFFFF' : '#000000'} style={{ marginRight: 6 }} />
+          <Text style={[styles.tabText, { color: colors.textPrimary }]}>DIRECT</Text>
         </TouchableOpacity>
         
         <TouchableOpacity
@@ -121,26 +156,26 @@ export const CreateChatScreen: React.FC<any> = ({ navigation }) => {
           style={[
             styles.tab,
             {
-              backgroundColor: activeTab === 'group' ? BRUTALIST_COLORS.yellow : '#FFFFFF',
+              backgroundColor: activeTab === 'group' ? colors.yellow : colors.cardBg,
             }
           ]}
         >
-          <Users size={16} color="#000000" style={{ marginRight: 6 }} />
-          <Text style={styles.tabText}>GROUP CHAT</Text>
+          <Users size={16} color={isDarkMode ? '#FFFFFF' : '#000000'} style={{ marginRight: 6 }} />
+          <Text style={[styles.tabText, { color: colors.textPrimary }]}>GROUP CHAT</Text>
         </TouchableOpacity>
       </View>
 
       {/* Group Info Input Field */}
       {activeTab === 'group' && (
-        <BrutalistCard accentColor={BRUTALIST_COLORS.cardBg} padding={12} style={styles.groupMetaBox}>
-          <Text style={styles.label}>SECURED GROUP NAME</Text>
+        <BrutalistCard accentColor={colors.cardBg} padding={12} style={styles.groupMetaBox}>
+          <Text style={[styles.label, { color: colors.textPrimary }]}>GROUP NAME</Text>
           <BrutalistTextInput
-            placeholder="ENTER SECURED ROUTE TITLE..."
+            placeholder="Enter group name..."
             value={groupName}
             onChangeText={setGroupName}
             containerStyle={{ marginBottom: 10 }}
           />
-          <Text style={styles.selectedCountText}>
+          <Text style={[styles.selectedCountText, { color: colors.pink }]}>
             MEMBERS SELECTED: {selectedUsernames.length}
           </Text>
         </BrutalistCard>
@@ -149,19 +184,19 @@ export const CreateChatScreen: React.FC<any> = ({ navigation }) => {
       {/* Search Input Bar */}
       <View style={styles.searchRow}>
         <BrutalistTextInput
-          placeholder="SEARCH BY HANDLE OR @USERNAME..."
+          placeholder={activeTab === 'group' ? "FILTER FRIENDS..." : "SEARCH BY HANDLE OR @USERNAME..."}
           value={query}
           onChangeText={handleSearch}
-          icon={<Search size={18} color="#000000" />}
+          icon={<Search size={18} color={isDarkMode ? '#FFFFFF' : '#000000'} />}
           containerStyle={{ flex: 1 }}
         />
       </View>
 
       {/* Results Box */}
-      <BrutalistCard accentColor="#FFFFFF" padding={12} style={{ flex: 1 }}>
+      <BrutalistCard accentColor={colors.cardBg} padding={12} style={{ flex: 1 }}>
         {searching ? (
           <View style={styles.center}>
-            <ActivityIndicator color="#000000" size="large" />
+            <ActivityIndicator color={colors.textPrimary} size="large" />
           </View>
         ) : (
           <FlatList
@@ -180,20 +215,20 @@ export const CreateChatScreen: React.FC<any> = ({ navigation }) => {
                       toggleSelectMember(item.username);
                     }
                   }}
-                  style={styles.userCard}
+                  style={[styles.userCard, { borderBottomColor: isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)' }]}
                 >
                   <Avatar name={item.displayName} uri={item.avatarUrl} size={36} />
                   <View style={styles.userInfo}>
-                    <Text style={styles.displayName}>{item.displayName.toUpperCase()}</Text>
-                    <Text style={styles.username}>@{item.username.toLowerCase()}</Text>
+                    <Text style={[styles.displayName, { color: colors.textPrimary }]}>{item.displayName.toUpperCase()}</Text>
+                    <Text style={[styles.username, { color: colors.textSecondary }]}>@{item.username.toLowerCase()}</Text>
                   </View>
                   
                   {activeTab === 'group' && (
                     <View style={styles.checkbox}>
                       {isSelected ? (
-                        <CheckSquare size={22} color="#000000" />
+                        <CheckSquare size={22} color={colors.textPrimary} />
                       ) : (
-                        <Square size={22} color="#555555" />
+                        <Square size={22} color={colors.textSecondary} />
                       )}
                     </View>
                   )}
@@ -202,7 +237,9 @@ export const CreateChatScreen: React.FC<any> = ({ navigation }) => {
             }}
             ListEmptyComponent={
               <View style={styles.center}>
-                <Text style={styles.emptyText}>DIAL 2+ ALPHABETS TO ROUTE PEERS</Text>
+                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+                  {activeTab === 'group' ? "No friends found" : "Type 2+ characters to search"}
+                </Text>
               </View>
             }
           />
@@ -213,13 +250,13 @@ export const CreateChatScreen: React.FC<any> = ({ navigation }) => {
       {activeTab === 'group' && (
         <View style={styles.createBtnWrapper}>
           {creating ? (
-            <ActivityIndicator color="#000000" size="small" />
+            <ActivityIndicator color={colors.textPrimary} size="small" />
           ) : (
             <BrutalistButton
-              title="ESTABLISH GROUP ROUTE"
+              title="CREATE GROUP"
               onPress={handleCreateGroup}
               style={{ width: '100%' }}
-              accentColor={BRUTALIST_COLORS.pink}
+              accentColor={colors.pink}
             />
           )}
         </View>

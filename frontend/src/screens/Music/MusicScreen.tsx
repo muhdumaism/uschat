@@ -28,7 +28,7 @@ import {
   Share2,
 } from 'lucide-react-native';
 import Slider from '@react-native-community/slider';
-import { BRUTALIST_COLORS, BRUTALIST_STYLES } from '../../theme/brutalistTheme';
+import { BRUTALIST_COLORS, BRUTALIST_STYLES, useBrutalistTheme } from '../../theme/brutalistTheme';
 import { BrutalistCard } from '../../components/BrutalistCard';
 import { BrutalistButton } from '../../components/BrutalistButton';
 import { BrutalistTextInput } from '../../components/BrutalistTextInput';
@@ -36,6 +36,7 @@ import { apiClient } from '../../api/client';
 import { useMusicStore, Track } from '../../store/musicStore';
 
 export const MusicScreen: React.FC<any> = ({ navigation }) => {
+  const { colors, isDarkMode } = useBrutalistTheme();
   const [activeTab, setActiveTab] = useState<'search' | 'playlists' | 'likes'>('search');
   
   // Search state
@@ -171,55 +172,57 @@ export const MusicScreen: React.FC<any> = ({ navigation }) => {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
       <View style={styles.statusBarSpacer} />
 
       {/* Header Bar */}
       <View style={styles.header}>
-        <BrutalistButton onPress={() => navigation.goBack()} style={styles.backBtn} accentColor={BRUTALIST_COLORS.yellow}>
-          <ArrowLeft size={18} color="#000000" />
+        <BrutalistButton onPress={() => navigation.goBack()} style={styles.backBtn} accentColor={colors.yellow}>
+          <ArrowLeft size={18} color={isDarkMode ? '#FFFFFF' : '#000000'} />
         </BrutalistButton>
-        <Text style={styles.headerTitle}>MUSIC DECK</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>MUSIC DECK</Text>
         <View style={{ width: 36 }} />
       </View>
 
       {/* Tabs list */}
-      <View style={styles.tabBar}>
+      <View style={[styles.tabBar, { borderColor: colors.border }]}>
         <TouchableOpacity
           onPress={() => setActiveTab('search')}
           style={[
             styles.tab,
             {
-              backgroundColor: activeTab === 'search' ? BRUTALIST_COLORS.yellow : '#FFFFFF',
+              backgroundColor: activeTab === 'search' ? colors.yellow : colors.cardBg,
               borderRightWidth: BRUTALIST_STYLES.borderWidthThin,
+              borderRightColor: colors.border,
             }
           ]}
         >
-          <Text style={styles.tabText}>SEARCH</Text>
+          <Text style={[styles.tabText, { color: colors.textPrimary }]}>SEARCH</Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => setActiveTab('playlists')}
           style={[
             styles.tab,
             {
-              backgroundColor: activeTab === 'playlists' ? BRUTALIST_COLORS.yellow : '#FFFFFF',
+              backgroundColor: activeTab === 'playlists' ? colors.yellow : colors.cardBg,
               borderRightWidth: BRUTALIST_STYLES.borderWidthThin,
+              borderRightColor: colors.border,
             }
           ]}
         >
-          <Text style={styles.tabText}>PLAYLISTS</Text>
+          <Text style={[styles.tabText, { color: colors.textPrimary }]}>PLAYLISTS</Text>
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => setActiveTab('likes')}
           style={[
             styles.tab,
             {
-              backgroundColor: activeTab === 'likes' ? BRUTALIST_COLORS.yellow : '#FFFFFF',
+              backgroundColor: activeTab === 'likes' ? colors.yellow : colors.cardBg,
             }
           ]}
         >
-          <Text style={styles.tabText}>LIKES</Text>
+          <Text style={[styles.tabText, { color: colors.textPrimary }]}>LIKES</Text>
         </TouchableOpacity>
       </View>
 
@@ -230,6 +233,7 @@ export const MusicScreen: React.FC<any> = ({ navigation }) => {
             <View style={styles.searchRow}>
               <BrutalistTextInput
                 placeholder="SEARCH TRACK TITLE OR ARTIST..."
+                placeholderTextColor={isDarkMode ? '#666666' : '#888888'}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 containerStyle={{ flex: 1 }}
@@ -237,15 +241,15 @@ export const MusicScreen: React.FC<any> = ({ navigation }) => {
               <BrutalistButton
                 onPress={handleSearch}
                 style={styles.searchBtn}
-                accentColor={BRUTALIST_COLORS.yellow}
+                accentColor={colors.yellow}
               >
-                <Search size={18} color="#000000" />
+                <Search size={18} color={isDarkMode ? '#FFFFFF' : '#000000'} />
               </BrutalistButton>
             </View>
 
             {searching ? (
               <View style={styles.center}>
-                <ActivityIndicator color="#000" size="large" />
+                <ActivityIndicator color={colors.textPrimary} size="large" />
               </View>
             ) : (
               <FlatList
@@ -255,7 +259,7 @@ export const MusicScreen: React.FC<any> = ({ navigation }) => {
                 contentContainerStyle={styles.listContent}
                 ListEmptyComponent={
                   <View style={styles.center}>
-                    <Text style={styles.emptyText}>QUERY HIGH QUALITY STREAMS VIA LAVALINK</Text>
+                    <Text style={[styles.emptyText, { color: colors.textSecondary }]}>QUERY HIGH QUALITY STREAMS VIA LAVALINK</Text>
                   </View>
                 }
               />
@@ -266,11 +270,12 @@ export const MusicScreen: React.FC<any> = ({ navigation }) => {
         {activeTab === 'playlists' && (
           <ScrollView contentContainerStyle={styles.scrollContent}>
             {/* Create Playlist */}
-            <BrutalistCard accentColor="#FFFFFF" padding={12} style={styles.metaCard}>
-              <Text style={styles.label}>NEW PLAYLIST CONTAINER</Text>
+            <BrutalistCard accentColor={colors.cardBg} padding={12} style={styles.metaCard}>
+              <Text style={[styles.label, { color: colors.textPrimary }]}>NEW PLAYLIST CONTAINER</Text>
               <View style={styles.row}>
                 <BrutalistTextInput
                   placeholder="PLAYLIST NAME..."
+                  placeholderTextColor={isDarkMode ? '#666666' : '#888888'}
                   value={newPlaylistName}
                   onChangeText={setNewPlaylistName}
                   containerStyle={{ flex: 1, marginRight: 8 }}
@@ -278,17 +283,18 @@ export const MusicScreen: React.FC<any> = ({ navigation }) => {
                 <BrutalistButton
                   onPress={handleCreatePlaylist}
                   title="CREATE"
-                  accentColor={BRUTALIST_COLORS.yellow}
+                  accentColor={colors.yellow}
                 />
               </View>
             </BrutalistCard>
 
             {/* Spotify Importer */}
-            <BrutalistCard accentColor="#FFFFFF" padding={12} style={styles.metaCard}>
-              <Text style={styles.label}>IMPORT SPOTIFY PLAYLIST URL</Text>
+            <BrutalistCard accentColor={colors.cardBg} padding={12} style={styles.metaCard}>
+              <Text style={[styles.label, { color: colors.textPrimary }]}>IMPORT SPOTIFY PLAYLIST URL</Text>
               <View style={styles.row}>
                 <BrutalistTextInput
                   placeholder="SPOTIFY URL..."
+                  placeholderTextColor={isDarkMode ? '#666666' : '#888888'}
                   value={spotifyUrl}
                   onChangeText={setSpotifyUrl}
                   containerStyle={{ flex: 1, marginRight: 8 }}
@@ -296,7 +302,7 @@ export const MusicScreen: React.FC<any> = ({ navigation }) => {
                 <BrutalistButton
                   onPress={handleSpotifyImport}
                   title={importingSpotify ? "IMPORTING..." : "IMPORT"}
-                  accentColor={BRUTALIST_COLORS.green}
+                  accentColor={colors.green}
                   disabled={importingSpotify}
                 />
               </View>
@@ -304,15 +310,15 @@ export const MusicScreen: React.FC<any> = ({ navigation }) => {
 
             {/* Playlist list */}
             {loadingPlaylists ? (
-              <ActivityIndicator color="#000" />
+              <ActivityIndicator color={colors.textPrimary} />
             ) : (
               playlists.map((pl) => (
-                <BrutalistCard key={pl.id} accentColor="#FFFFFF" padding={12} style={styles.metaCard}>
+                <BrutalistCard key={pl.id} accentColor={colors.cardBg} padding={12} style={styles.metaCard}>
                   <View style={styles.row}>
-                    <ListMusic size={20} color="#000" style={{ marginRight: 8 }} />
+                    <ListMusic size={20} color={colors.textPrimary} style={{ marginRight: 8 }} />
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.playlistName}>{pl.name.toUpperCase()}</Text>
-                      <Text style={styles.playlistTracks}>
+                      <Text style={[styles.playlistName, { color: colors.textPrimary }]}>{pl.name.toUpperCase()}</Text>
+                      <Text style={[styles.playlistTracks, { color: colors.textSecondary }]}>
                         {pl.tracks?.length || 0} TRACKS RESOLVED
                       </Text>
                     </View>
@@ -325,7 +331,7 @@ export const MusicScreen: React.FC<any> = ({ navigation }) => {
                           Alert.alert('ERROR', 'FAILED TO DELETE PLAYLIST.');
                         }
                       }}
-                      accentColor={BRUTALIST_COLORS.red}
+                      accentColor={colors.red}
                       style={{ paddingHorizontal: 8, paddingVertical: 6 }}
                     >
                       <Trash2 size={12} color="#FFFFFF" />
@@ -345,7 +351,7 @@ export const MusicScreen: React.FC<any> = ({ navigation }) => {
             contentContainerStyle={styles.listContent}
             ListEmptyComponent={
               <View style={styles.center}>
-                <Text style={styles.emptyText}>NO SONGS SAVED IN YOUR LIKES PACKET</Text>
+                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>NO SONGS SAVED IN YOUR LIKES PACKET</Text>
               </View>
             }
           />
@@ -354,19 +360,19 @@ export const MusicScreen: React.FC<any> = ({ navigation }) => {
 
       {/* Brutalist Player Deck Panel */}
       {currentTrack && (
-        <BrutalistCard accentColor={BRUTALIST_COLORS.yellow} padding={12} style={styles.playerDeck}>
+        <BrutalistCard accentColor={colors.cardBg} padding={12} style={styles.playerDeck}>
           <View style={styles.playerInfoRow}>
-            <Music size={18} color="#000000" style={{ marginRight: 8 }} />
+            <Music size={18} color={colors.textPrimary} style={{ marginRight: 8 }} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.playerTitle} numberOfLines={1}>
+              <Text style={[styles.playerTitle, { color: colors.textPrimary }]} numberOfLines={1}>
                 {currentTrack.title.toUpperCase()}
               </Text>
-              <Text style={styles.playerArtist} numberOfLines={1}>
+              <Text style={[styles.playerArtist, { color: colors.textSecondary }]} numberOfLines={1}>
                 {currentTrack.artist.toUpperCase()}
               </Text>
             </View>
             <TouchableOpacity onPress={() => (likedSongs.some((s: any) => s.trackUri === currentTrack.trackUri) ? unlikeTrack(currentTrack.trackUri) : likeTrack(currentTrack))}>
-              <Heart size={20} color={likedSongs.some((s: any) => s.trackUri === currentTrack.trackUri) ? BRUTALIST_COLORS.red : '#000000'} fill={likedSongs.some((s: any) => s.trackUri === currentTrack.trackUri) ? BRUTALIST_COLORS.red : 'transparent'} />
+              <Heart size={20} color={likedSongs.some((s: any) => s.trackUri === currentTrack.trackUri) ? colors.red : colors.textPrimary} fill={likedSongs.some((s: any) => s.trackUri === currentTrack.trackUri) ? colors.red : 'transparent'} />
             </TouchableOpacity>
           </View>
 
@@ -378,30 +384,30 @@ export const MusicScreen: React.FC<any> = ({ navigation }) => {
               maximumValue={duration}
               value={position}
               onSlidingComplete={seekTrack}
-              minimumTrackTintColor="#000000"
-              maximumTrackTintColor="#555555"
-              thumbTintColor="#000000"
+              minimumTrackTintColor={colors.textPrimary}
+              maximumTrackTintColor={isDarkMode ? '#333333' : '#CCCCCC'}
+              thumbTintColor={colors.textPrimary}
             />
             <View style={styles.timeLabelRow}>
-              <Text style={styles.timeTextLabel}>{formatMillis(position)}</Text>
-              <Text style={styles.timeTextLabel}>{formatMillis(duration)}</Text>
+              <Text style={[styles.timeTextLabel, { color: colors.textSecondary }]}>{formatMillis(position)}</Text>
+              <Text style={[styles.timeTextLabel, { color: colors.textSecondary }]}>{formatMillis(duration)}</Text>
             </View>
           </View>
 
           {/* Action transport controls */}
           <View style={styles.controlRow}>
-            <BrutalistButton onPress={toggleShuffle} style={styles.miniCtrlBtn} accentColor={isShuffled ? BRUTALIST_COLORS.pink : '#FFFFFF'}>
-              <Shuffle size={14} color="#000000" />
+            <BrutalistButton onPress={toggleShuffle} style={styles.miniCtrlBtn} accentColor={isShuffled ? colors.pink : colors.cardBg}>
+              <Shuffle size={14} color={isDarkMode ? '#FFFFFF' : '#000000'} />
             </BrutalistButton>
             
-            <BrutalistButton onPress={prevTrack} style={styles.miniCtrlBtn} accentColor="#FFFFFF">
-              <SkipBack size={16} color="#000000" fill="#000000" />
+            <BrutalistButton onPress={prevTrack} style={styles.miniCtrlBtn} accentColor={colors.cardBg}>
+              <SkipBack size={16} color={isDarkMode ? '#FFFFFF' : '#000000'} fill={isDarkMode ? '#FFFFFF' : '#000000'} />
             </BrutalistButton>
 
             <BrutalistButton
               onPress={isPlaying ? pauseTrack : resumeTrack}
               style={styles.playPauseBtn}
-              accentColor={BRUTALIST_COLORS.green}
+              accentColor={colors.green}
             >
               {isPlaying ? (
                 <Pause size={18} color="#000" fill="#000" />
@@ -410,12 +416,12 @@ export const MusicScreen: React.FC<any> = ({ navigation }) => {
               )}
             </BrutalistButton>
 
-            <BrutalistButton onPress={nextTrack} style={styles.miniCtrlBtn} accentColor="#FFFFFF">
-              <SkipForward size={16} color="#000000" fill="#000000" />
+            <BrutalistButton onPress={nextTrack} style={styles.miniCtrlBtn} accentColor={colors.cardBg}>
+              <SkipForward size={16} color={isDarkMode ? '#FFFFFF' : '#000000'} fill={isDarkMode ? '#FFFFFF' : '#000000'} />
             </BrutalistButton>
 
-            <BrutalistButton onPress={toggleLoop} style={styles.miniCtrlBtn} accentColor={isLooping ? BRUTALIST_COLORS.pink : '#FFFFFF'}>
-              <Repeat size={14} color="#000000" />
+            <BrutalistButton onPress={toggleLoop} style={styles.miniCtrlBtn} accentColor={isLooping ? colors.pink : colors.cardBg}>
+              <Repeat size={14} color={isDarkMode ? '#FFFFFF' : '#000000'} />
             </BrutalistButton>
           </View>
         </BrutalistCard>

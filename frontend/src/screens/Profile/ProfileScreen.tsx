@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Camera, User, FileText, LogOut, ArrowLeft, ShieldAlert } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { BRUTALIST_COLORS, BRUTALIST_STYLES } from '../../theme/brutalistTheme';
+import { BRUTALIST_COLORS, BRUTALIST_STYLES, useBrutalistTheme } from '../../theme/brutalistTheme';
 import { BrutalistCard } from '../../components/BrutalistCard';
 import { BrutalistButton } from '../../components/BrutalistButton';
 import { BrutalistTextInput } from '../../components/BrutalistTextInput';
@@ -21,6 +21,7 @@ import { useAuthStore } from '../../store/authStore';
 import { apiClient, API_BASE_URL } from '../../api/client';
 
 export const ProfileScreen: React.FC<any> = ({ navigation }) => {
+  const { colors, isDarkMode } = useBrutalistTheme();
   const { user, updateUser, logout, token } = useAuthStore();
 
   const [displayName, setDisplayName] = useState(user?.displayName || '');
@@ -113,38 +114,42 @@ export const ProfileScreen: React.FC<any> = ({ navigation }) => {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
       <View style={styles.statusBarSpacer} />
 
-      {/* Header Bar */}
+      {/* Header */}
       <View style={styles.header}>
-        <BrutalistButton onPress={() => navigation.goBack()} style={styles.backBtn} accentColor={BRUTALIST_COLORS.yellow}>
-          <ArrowLeft size={18} color="#000000" />
+        <BrutalistButton
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          accentColor={colors.yellow}
+        >
+          <ArrowLeft size={18} color={isDarkMode ? '#FFFFFF' : '#000000'} />
         </BrutalistButton>
-        <Text style={styles.headerTitle}>EDIT PROFILE</Text>
+        <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>MY PROFILE</Text>
         <View style={{ width: 36 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         
         {/* Profile Card Summary */}
-        <BrutalistCard accentColor={BRUTALIST_COLORS.cardBg} padding={16} style={styles.avatarCard}>
+        <BrutalistCard accentColor={colors.cardBg} padding={16} style={styles.avatarCard}>
           <View style={styles.avatarRow}>
             {/* Square Bezel Avatar Box */}
-            <View style={styles.avatarBezel}>
+            <View style={[styles.avatarBezel, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
               <Avatar name={user?.displayName || user?.username || 'User'} uri={avatarUrl} size={84} />
               {uploadingImage && (
-                <View style={styles.uploadOverlay}>
-                  <ActivityIndicator color="#000000" size="small" />
+                <View style={[styles.uploadOverlay, { backgroundColor: isDarkMode ? 'rgba(0,0,0,0.6)' : 'rgba(255,255,255,0.7)' }]}>
+                  <ActivityIndicator color={colors.textPrimary} size="small" />
                 </View>
               )}
             </View>
 
             <View style={styles.metaInfo}>
-              <Text style={styles.usernameText}>@{user?.username?.toUpperCase()}</Text>
-              <Text style={styles.emailText}>{user?.email}</Text>
-              <BrutalistButton onPress={handlePickAvatar} style={styles.cameraBtn} accentColor={BRUTALIST_COLORS.yellow}>
+              <Text style={[styles.usernameText, { color: colors.textPrimary }]}>@{user?.username?.toUpperCase()}</Text>
+              <Text style={[styles.emailText, { color: colors.textSecondary }]}>{user?.email}</Text>
+              <BrutalistButton onPress={handlePickAvatar} style={styles.cameraBtn} accentColor={colors.yellow}>
                 <Camera size={12} color="#000000" style={{ marginRight: 6 }} />
                 <Text style={styles.btnText}>PHOTO</Text>
               </BrutalistButton>
@@ -152,24 +157,24 @@ export const ProfileScreen: React.FC<any> = ({ navigation }) => {
           </View>
         </BrutalistCard>
 
-        {/* Profile Form Card */}
-        <Text style={styles.sectionTitle}>PERSONAL DETAILS</Text>
-        <BrutalistCard accentColor={BRUTALIST_COLORS.cardBg} padding={16} style={styles.formCard}>
-          <Text style={styles.label}>DISPLAY NAME</Text>
+        {/* Profile Form Form Card */}
+        <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>PERSONAL DETAILS</Text>
+        <BrutalistCard accentColor={colors.cardBg} padding={16} style={styles.formCard}>
+          <Text style={[styles.label, { color: colors.textPrimary }]}>DISPLAY NAME</Text>
           <BrutalistTextInput
             placeholder="DISPLAY NAME"
             value={displayName}
             onChangeText={setDisplayName}
-            icon={<User size={16} color="#000000" />}
+            icon={<User size={16} color={isDarkMode ? '#FFFFFF' : '#000000'} />}
             containerStyle={{ marginBottom: 16 }}
           />
 
-          <Text style={styles.label}>BIO / STATUS PACKET</Text>
+          <Text style={[styles.label, { color: colors.textPrimary }]}>BIO / STATUS PACKET</Text>
           <BrutalistTextInput
             placeholder="Tell others about yourself..."
             value={bio}
             onChangeText={setBio}
-            icon={<FileText size={16} color="#000000" />}
+            icon={<FileText size={16} color={isDarkMode ? '#FFFFFF' : '#000000'} />}
             containerStyle={{ marginBottom: 20 }}
           />
 
@@ -177,29 +182,29 @@ export const ProfileScreen: React.FC<any> = ({ navigation }) => {
             title={loading ? "SAVING..." : "SAVE PROFILE"}
             onPress={handleSaveProfile}
             disabled={loading}
-            accentColor={BRUTALIST_COLORS.yellow}
+            accentColor={colors.yellow}
           />
         </BrutalistCard>
 
         {/* Security Warning Box */}
-        <BrutalistCard accentColor={BRUTALIST_COLORS.blue} padding={12} style={styles.securityCard}>
+        <BrutalistCard accentColor={colors.blue} padding={12} style={styles.securityCard}>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
             <ShieldAlert size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
-            <Text style={styles.securityTitle}>CRYPTOGRAPHIC IDENTITY ACTIVE</Text>
+            <Text style={styles.securityTitle}>ACCOUNT VERIFIED</Text>
           </View>
           <Text style={styles.securitySub}>
             Private keys verified. Chats are fully encrypted end-to-end.
           </Text>
         </BrutalistCard>
 
-        {/* Disconnect Account Session */}
+        {/* Log Out */}
         <BrutalistButton
           onPress={logout}
           style={styles.logoutBtn}
-          accentColor={BRUTALIST_COLORS.red}
+          accentColor={colors.red}
         >
           <LogOut size={16} color="#FFFFFF" style={{ marginRight: 8 }} />
-          <Text style={styles.logoutText}>DISCONNECT DEPLOYED NODE</Text>
+          <Text style={styles.logoutText}>LOG OUT</Text>
         </BrutalistButton>
 
       </ScrollView>
