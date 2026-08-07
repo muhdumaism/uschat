@@ -92,13 +92,7 @@ export const FloatingMiniPlayer: React.FC = () => {
     expandProgress.value = withTiming(isExpanded ? 1 : 0, { duration: 320 });
   }, [isExpanded]);
 
-  if (!currentTrack) return null;
-
-  // Hide mini player on specified screens
-  const hiddenScreens = ['Login', 'Register', 'Call'];
-  if (hiddenScreens.includes(activeRoute)) return null;
-
-  const isLiked = likedSongs.some((s: any) => s.trackUri === currentTrack.trackUri);
+  const isLiked = currentTrack ? likedSongs.some((s: any) => s.trackUri === currentTrack.trackUri) : false;
 
   // Formatting utility
   const formatTime = (millis: number) => {
@@ -149,7 +143,7 @@ export const FloatingMiniPlayer: React.FC = () => {
 
   // Double tap artwork -> toggle like
   const onDoubleTapArtwork = (event: any) => {
-    if (event.nativeEvent.state === State.ACTIVE) {
+    if (event.nativeEvent.state === State.ACTIVE && currentTrack) {
       if (isLiked) {
         unlikeTrack(currentTrack.trackUri);
       } else {
@@ -157,6 +151,11 @@ export const FloatingMiniPlayer: React.FC = () => {
       }
     }
   };
+
+  // Perform conditional rendering checks after all hooks are evaluated
+  if (!currentTrack) return null;
+  const hiddenScreens = ['Login', 'Register', 'Call'];
+  if (hiddenScreens.includes(activeRoute)) return null;
 
   return (
     <GestureHandlerRootView style={[styles.gestureWrapper, isExpanded && styles.fullscreen]}>
