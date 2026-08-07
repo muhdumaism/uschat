@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import axios from 'axios';
 import ytdl from '@distube/ytdl-core';
+import ytdlExec from 'yt-dlp-exec';
 import fs from 'fs';
 import path from 'path';
 import { prisma } from '../prisma/client';
@@ -140,19 +141,31 @@ export async function musicRoutes(fastify: FastifyInstance) {
   fastify.get('/stream', { preHandler: [authenticate] }, async (request, reply) => {
     const { uri } = z.object({ uri: z.string().url() }).parse(request.query);
     try {
-      const audioStream = ytdl(uri, {
-        filter: 'audioonly',
-        quality: 'highestaudio',
-        highWaterMark: 1 << 25, // 32MB buffer
-        agent: ytdlAgent,
-      });
+      fastify.log.info({ uri }, '[MusicRouter] Resolving stream with yt-dlp-exec...');
+      const cookiesPath = path.join(process.cwd(), 'youtube_cookies.json');
+      const ytDlpOptions: any = {
+        getUrl: true,
+        format: 'bestaudio',
+      };
+      if (fs.existsSync(cookiesPath)) {
+        ytDlpOptions.cookies = cookiesPath;
+      }
 
-      audioStream.on('error', (err) => {
-        fastify.log.error(err, '[MusicRouter] Direct audio stream pipe failed');
+      const streamUrl = (await ytdlExec(uri, ytDlpOptions)) as any;
+      if (!streamUrl) {
+        throw new Error('yt-dlp-exec returned empty stream URL');
+      }
+
+      fastify.log.info('[MusicRouter] Streaming format URL via Axios...');
+      const response = await axios.get(streamUrl.trim(), {
+        responseType: 'stream',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
       });
 
       reply.header('Content-Type', 'audio/mpeg');
-      return reply.send(audioStream);
+      return reply.send(response.data);
     } catch (err: any) {
       fastify.log.error(err, '[MusicRouter] Stream resolution failed');
       return reply.status(500).send({ error: 'Resolution Failed', message: 'Failed to resolve audio stream link' });
