@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View, StyleProp, ViewStyle, TextStyle } from 'react-native';
-import { BRUTALIST_COLORS, BRUTALIST_STYLES } from '../theme/brutalistTheme';
+import { BRUTALIST_COLORS, BRUTALIST_STYLES, useBrutalistTheme } from '../theme/brutalistTheme';
 
 interface BrutalistButtonProps {
   onPress: () => void;
@@ -19,10 +19,15 @@ export const BrutalistButton: React.FC<BrutalistButtonProps> = ({
   title,
   style,
   textStyle,
-  accentColor = BRUTALIST_COLORS.yellow,
-  shadowColor = BRUTALIST_COLORS.shadow,
+  accentColor,
+  shadowColor,
   disabled = false,
 }) => {
+  const { colors } = useBrutalistTheme();
+  const btnBg = accentColor || colors.yellow;
+  const btnShadow = shadowColor || colors.shadow;
+  const btnBorder = colors.border;
+
   // Extract layout/sizing styles to apply to both layers so they align and size identically
   const flat = StyleSheet.flatten(style) || {};
   const outerKeys = [
@@ -69,15 +74,15 @@ export const BrutalistButton: React.FC<BrutalistButtonProps> = ({
         
         return (
           <>
-            {/* Hard Black Shadow Layer */}
+            {/* Hard Black/White Shadow Layer */}
             <View
               style={[
                 styles.shadowLayer,
                 {
-                  backgroundColor: shadowColor,
+                  backgroundColor: btnShadow,
                   borderRadius: BRUTALIST_STYLES.borderRadiusSmall,
                   borderWidth: BRUTALIST_STYLES.borderWidth,
-                  borderColor: BRUTALIST_COLORS.border,
+                  borderColor: btnBorder,
                 },
               ]}
             />
@@ -88,10 +93,10 @@ export const BrutalistButton: React.FC<BrutalistButtonProps> = ({
                 styles.contentLayer,
                 innerStyle,
                 {
-                  backgroundColor: accentColor,
+                  backgroundColor: btnBg,
                   borderRadius: BRUTALIST_STYLES.borderRadiusSmall,
                   borderWidth: BRUTALIST_STYLES.borderWidth,
-                  borderColor: BRUTALIST_COLORS.border,
+                  borderColor: btnBorder,
                   transform: [
                     { translateX: translateOffset },
                     { translateY: translateOffset },
@@ -100,7 +105,7 @@ export const BrutalistButton: React.FC<BrutalistButtonProps> = ({
               ]}
             >
               {title ? (
-                <Text style={[styles.btnText, textStyle]}>
+                <Text style={[styles.btnText, { color: colors.textPrimary }, textStyle]}>
                   {title.toUpperCase()}
                 </Text>
               ) : (
@@ -138,7 +143,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     fontFamily: BRUTALIST_STYLES.fontBold,
-    color: BRUTALIST_COLORS.textPrimary,
     letterSpacing: 1,
   },
 });

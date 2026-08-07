@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, StatusBar, Platform, Image } from 'react-native';
 import { Search, Plus, User as UserIcon, Settings as SettingsIcon, Mail, Music, ArrowRight, ShieldCheck } from 'lucide-react-native';
-import { BRUTALIST_COLORS, BRUTALIST_STYLES } from '../../theme/brutalistTheme';
+import { BRUTALIST_COLORS, BRUTALIST_STYLES, useBrutalistTheme } from '../../theme/brutalistTheme';
 import { BrutalistCard } from '../../components/BrutalistCard';
 import { BrutalistButton } from '../../components/BrutalistButton';
 import { BrutalistTextInput } from '../../components/BrutalistTextInput';
 import { Avatar } from '../../components/Avatar';
-import { UpdateModal } from '../../components/UpdateModal';
 import { useChatStore, ChatItem } from '../../store/chatStore';
 import { useMusicStore } from '../../store/musicStore';
 
@@ -14,6 +13,7 @@ export const HomeScreen: React.FC<any> = ({ navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const { chats, fetchChats, setActiveChat, onlineUsers, initWsListeners } = useChatStore();
   const { currentTrack, isPlaying, pauseTrack, resumeTrack } = useMusicStore();
+  const { colors, isDarkMode } = useBrutalistTheme();
 
   useEffect(() => {
     fetchChats();
@@ -54,7 +54,7 @@ export const HomeScreen: React.FC<any> = ({ navigation }) => {
         style={{ marginBottom: 16 }}
       >
         <BrutalistCard
-          accentColor={BRUTALIST_COLORS.cardBg}
+          accentColor={colors.cardBg}
           padding={16}
           contentStyle={styles.chatCardContent}
         >
@@ -66,24 +66,24 @@ export const HomeScreen: React.FC<any> = ({ navigation }) => {
 
             <View style={styles.chatInfo}>
               <View style={styles.nameRow}>
-                <Text style={styles.chatName}>{item.name.toUpperCase()}</Text>
-                <Text style={styles.timeText}>{lastMsgTime}</Text>
+                <Text style={[styles.chatName, { color: colors.textPrimary }]}>{item.name.toUpperCase()}</Text>
+                <Text style={[styles.timeText, { color: colors.textSecondary }]}>{lastMsgTime}</Text>
               </View>
 
               <View style={styles.subRow}>
                 {item.peerUsername ? (
-                  <Text style={styles.handleText}>@{item.peerUsername.toLowerCase()}</Text>
+                  <Text style={[styles.handleText, { color: colors.textMuted }]}>@{item.peerUsername.toLowerCase()}</Text>
                 ) : (
-                  <Text style={styles.handleText}>GROUP CHANNEL</Text>
+                  <Text style={[styles.handleText, { color: colors.textMuted }]}>GROUP CHANNEL</Text>
                 )}
                 {item.lastMessage && (
-                  <Text style={styles.lastMsgPreview} numberOfLines={1}>
+                  <Text style={[styles.lastMsgPreview, { color: colors.textSecondary }]} numberOfLines={1}>
                     {item.lastMessage.encryptedContent}
                   </Text>
                 )}
               </View>
             </View>
-            <ArrowRight size={20} color="#000000" style={{ marginLeft: 6 }} />
+            <ArrowRight size={20} color={colors.textPrimary} style={{ marginLeft: 6 }} />
           </View>
         </BrutalistCard>
       </TouchableOpacity>
@@ -91,8 +91,8 @@ export const HomeScreen: React.FC<any> = ({ navigation }) => {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} translucent backgroundColor="transparent" />
       <View style={styles.statusBarSpacer} />
 
       {/* Navigation Header */}
@@ -104,23 +104,23 @@ export const HomeScreen: React.FC<any> = ({ navigation }) => {
             resizeMode="contain"
           />
           <View>
-            <Text style={styles.headerTitle}>USCHAT</Text>
-            <Text style={styles.headerSubtitle}>SECURED NODE</Text>
+            <Text style={[styles.headerTitle, { color: colors.textPrimary }]}>USCHAT</Text>
+            <Text style={[styles.headerSubtitle, { color: colors.textMuted }]}>SECURED NODE</Text>
           </View>
         </View>
 
         <View style={styles.headerActions}>
-          <BrutalistButton onPress={() => navigation.navigate('Music')} style={styles.iconBtn} accentColor={BRUTALIST_COLORS.yellow}>
-            <Music size={16} color="#000000" />
+          <BrutalistButton onPress={() => navigation.navigate('Music')} style={styles.iconBtn} accentColor={colors.yellow}>
+            <Music size={16} color={isDarkMode ? '#FFFFFF' : '#000000'} />
           </BrutalistButton>
-          <BrutalistButton onPress={() => navigation.navigate('MessageRequests')} style={styles.iconBtn} accentColor={BRUTALIST_COLORS.pink}>
-            <Mail size={16} color="#000000" />
+          <BrutalistButton onPress={() => navigation.navigate('MessageRequests')} style={styles.iconBtn} accentColor={colors.pink}>
+            <Mail size={16} color={isDarkMode ? '#FFFFFF' : '#000000'} />
           </BrutalistButton>
-          <BrutalistButton onPress={() => navigation.navigate('Profile')} style={styles.iconBtn} accentColor={BRUTALIST_COLORS.blue}>
-            <UserIcon size={16} color="#000000" />
+          <BrutalistButton onPress={() => navigation.navigate('Profile')} style={styles.iconBtn} accentColor={colors.blue}>
+            <UserIcon size={16} color={isDarkMode ? '#FFFFFF' : '#000000'} />
           </BrutalistButton>
-          <BrutalistButton onPress={() => navigation.navigate('Settings')} style={styles.iconBtn} accentColor={BRUTALIST_COLORS.green}>
-            <SettingsIcon size={16} color="#000000" />
+          <BrutalistButton onPress={() => navigation.navigate('Settings')} style={styles.iconBtn} accentColor={colors.green}>
+            <SettingsIcon size={16} color={isDarkMode ? '#FFFFFF' : '#000000'} />
           </BrutalistButton>
         </View>
       </View>
@@ -131,16 +131,16 @@ export const HomeScreen: React.FC<any> = ({ navigation }) => {
           placeholder="SEARCH CHATS..."
           value={searchQuery}
           onChangeText={setSearchQuery}
-          icon={<Search size={18} color="#000000" />}
+          icon={<Search size={18} color={colors.textPrimary} />}
           containerStyle={{ flex: 1 }}
         />
         <BrutalistButton
           onPress={() => navigation.navigate('CreateChat')}
           style={styles.addBtn}
-          accentColor={BRUTALIST_COLORS.yellow}
+          accentColor={colors.yellow}
         >
-          <Plus size={16} color="#000000" style={{ marginRight: 4 }} />
-          <Text style={styles.addBtnText}>ADD</Text>
+          <Plus size={16} color={isDarkMode ? '#FFFFFF' : '#000000'} style={{ marginRight: 4 }} />
+          <Text style={[styles.addBtnText, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}>ADD</Text>
         </BrutalistButton>
       </View>
 
@@ -152,7 +152,7 @@ export const HomeScreen: React.FC<any> = ({ navigation }) => {
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={
           <View style={styles.emptyWrapper}>
-            <BrutalistCard accentColor={BRUTALIST_COLORS.blue} padding={20}>
+            <BrutalistCard accentColor={colors.blue} padding={20}>
               <View style={{ alignItems: 'center' }}>
                 <ShieldCheck size={32} color="#000000" style={{ marginBottom: 12 }} />
                 <Text style={styles.emptyTitle}>NO ACTIVE CHANNELS</Text>
@@ -172,30 +172,28 @@ export const HomeScreen: React.FC<any> = ({ navigation }) => {
           onPress={() => navigation.navigate('Music')}
           style={styles.miniPlayerDock}
         >
-          <BrutalistCard accentColor={BRUTALIST_COLORS.green} padding={10}>
+          <BrutalistCard accentColor={colors.green} padding={10}>
             <View style={styles.miniPlayerRow}>
-              <Music size={16} color="#000000" style={{ marginRight: 10 }} />
+              <Music size={16} color={isDarkMode ? '#FFFFFF' : '#000000'} style={{ marginRight: 10 }} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.miniPlayerTitle} numberOfLines={1}>
+                <Text style={[styles.miniPlayerTitle, { color: isDarkMode ? '#FFFFFF' : '#000000' }]} numberOfLines={1}>
                   {currentTrack.title.toUpperCase()}
                 </Text>
-                <Text style={styles.miniPlayerArtist} numberOfLines={1}>
+                <Text style={[styles.miniPlayerArtist, { color: isDarkMode ? '#EEEEEE' : '#333333' }]} numberOfLines={1}>
                   {currentTrack.artist.toUpperCase()}
                 </Text>
               </View>
               <BrutalistButton
                 onPress={isPlaying ? pauseTrack : resumeTrack}
                 style={styles.miniPlayerPlayBtn}
-                accentColor={BRUTALIST_COLORS.yellow}
+                accentColor={colors.yellow}
               >
-                <Text style={styles.miniPlayBtnText}>{isPlaying ? 'PAUSE' : 'PLAY'}</Text>
+                <Text style={[styles.miniPlayBtnText, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}>{isPlaying ? 'PAUSE' : 'PLAY'}</Text>
               </BrutalistButton>
             </View>
           </BrutalistCard>
         </TouchableOpacity>
       )}
-
-      <UpdateModal />
     </View>
   );
 };

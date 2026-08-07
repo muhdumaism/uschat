@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Animated, Vibration } from 'react-native';
 import { Eye, Lock, CheckCheck, Reply } from 'lucide-react-native';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
-import { BRUTALIST_COLORS, BRUTALIST_STYLES } from '../theme/brutalistTheme';
+import { BRUTALIST_COLORS, BRUTALIST_STYLES, useBrutalistTheme } from '../theme/brutalistTheme';
 import { ChatMessage } from '../store/chatStore';
 import { VoiceMessageBubble } from './VoiceMessageBubble';
 import { MediaCacheService } from '../services/mediaCacheService';
@@ -72,6 +72,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   onSwipeToReply,
   onReplyPress,
 }) => {
+  const { colors, isDarkMode } = useBrutalistTheme();
   const time = new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const swipeableRef = useRef<Swipeable>(null);
 
@@ -87,17 +88,17 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         style={[
           styles.replyBubble,
           {
-            backgroundColor: isMe ? 'rgba(0,0,0,0.08)' : 'rgba(0,0,0,0.05)',
+            backgroundColor: isMe ? (isDarkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)') : (isDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'),
             borderLeftWidth: 4,
-            borderLeftColor: '#000000',
+            borderLeftColor: colors.border,
           }
         ]}
       >
         <View style={styles.replyContent}>
-          <Text style={styles.replySender}>
+          <Text style={[styles.replySender, { color: colors.textPrimary }]}>
             {(message.replyTo.sender?.displayName || message.replyTo.sender?.username || 'User').toUpperCase()}
           </Text>
-          <Text style={styles.replyText} numberOfLines={1}>
+          <Text style={[styles.replyText, { color: colors.textSecondary }]} numberOfLines={1}>
             {replyText}
           </Text>
         </View>
@@ -120,10 +121,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             key={emoji}
             activeOpacity={0.8}
             onPress={() => onReactPress && onReactPress(emoji)}
-            style={styles.reactionBadge}
+            style={[styles.reactionBadge, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
           >
             <Text style={styles.reactionEmoji}>{emoji}</Text>
-            {count > 1 && <Text style={styles.reactionCount}>{count}</Text>}
+            {count > 1 && <Text style={[styles.reactionCount, { color: colors.textPrimary }]}>{count}</Text>}
           </TouchableOpacity>
         ))}
       </View>
@@ -139,32 +140,32 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
     return (
       <View style={styles.replyActionContainer}>
-        <Animated.View style={[styles.replyActionIcon, { transform: [{ scale }] }]}>
-          <Reply size={20} color="#000000" />
+        <Animated.View style={[styles.replyActionIcon, { backgroundColor: colors.yellow, borderColor: colors.border, transform: [{ scale }] }]}>
+          <Reply size={20} color={isDarkMode ? '#FFFFFF' : '#000000'} />
         </Animated.View>
       </View>
     );
   };
 
   const renderContent = () => {
-    const bubbleBg = isMe ? BRUTALIST_COLORS.yellow : '#FFFFFF';
+    const bubbleBg = isMe ? colors.yellow : colors.cardBg;
 
     if (message.viewOnce && message.isViewed) {
       return (
         <View style={isMe ? styles.myContainer : styles.peerContainer}>
           <View style={styles.bubbleWrapper}>
-            <View style={styles.shadowLayer} />
+            <View style={[styles.shadowLayer, { backgroundColor: colors.border, borderColor: colors.border }]} />
             <TouchableOpacity
               activeOpacity={0.9}
               delayLongPress={180}
               onLongPress={onLongPress}
-              style={[styles.bubble, { backgroundColor: bubbleBg }]}
+              style={[styles.bubble, { backgroundColor: bubbleBg, borderColor: colors.border }]}
             >
               <View style={styles.viewOnceBox}>
-                <Eye size={16} color="#000000" />
-                <Text style={styles.viewOnceOpenedText}>VIEW ONCE PHOTO OPENED</Text>
+                <Eye size={16} color={colors.textPrimary} />
+                <Text style={[styles.viewOnceOpenedText, { color: colors.textSecondary }]}>VIEW ONCE PHOTO OPENED</Text>
               </View>
-              <Text style={styles.timeText}>{time}</Text>
+              <Text style={[styles.timeText, { color: colors.textSecondary }]}>{time}</Text>
             </TouchableOpacity>
           </View>
           {renderReactions()}
@@ -176,21 +177,21 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       return (
         <View style={isMe ? styles.myContainer : styles.peerContainer}>
           <View style={styles.bubbleWrapper}>
-            <View style={styles.shadowLayer} />
+            <View style={[styles.shadowLayer, { backgroundColor: colors.border, borderColor: colors.border }]} />
             <TouchableOpacity
               activeOpacity={0.8}
               delayLongPress={180}
               onPress={isMe ? undefined : onOpenViewOnce}
               onLongPress={onLongPress}
-              style={[styles.bubble, { backgroundColor: bubbleBg }]}
+              style={[styles.bubble, { backgroundColor: bubbleBg, borderColor: colors.border }]}
             >
               <View style={styles.viewOnceBox}>
-                <Eye size={18} color="#000000" />
-                <Text style={styles.viewOncePendingText}>
+                <Eye size={18} color={colors.textPrimary} />
+                <Text style={[styles.viewOncePendingText, { color: colors.textPrimary }]}>
                   {isMe ? 'VIEW ONCE PHOTO' : 'VIEW ONCE PHOTO (TAP TO VIEW)'}
                 </Text>
               </View>
-              <Text style={styles.timeText}>{time}</Text>
+              <Text style={[styles.timeText, { color: colors.textSecondary }]}>{time}</Text>
             </TouchableOpacity>
           </View>
           {renderReactions()}
@@ -223,12 +224,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     return (
       <View style={isMe ? styles.myContainer : styles.peerContainer}>
         <View style={styles.bubbleWrapper}>
-          <View style={styles.shadowLayer} />
+          <View style={[styles.shadowLayer, { backgroundColor: colors.border, borderColor: colors.border }]} />
           <TouchableOpacity
             activeOpacity={0.95}
             delayLongPress={180}
             onLongPress={onLongPress}
-            style={[styles.bubble, { backgroundColor: bubbleBg }]}
+            style={[styles.bubble, { backgroundColor: bubbleBg, borderColor: colors.border }]}
           >
             {renderReplyPreview()}
             {isVoice && voicePayload ? (
@@ -246,7 +247,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 delayLongPress={180}
                 onPress={() => onOpenImage && onOpenImage(imageUri)}
                 onLongPress={onLongPress}
-                style={styles.imageContainer}
+                style={[styles.imageContainer, { borderColor: colors.border }]}
               >
                 <CachedImage
                   uri={message.attachments?.[0]?.thumbnailUrl || imageUri}
@@ -255,18 +256,18 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 />
               </TouchableOpacity>
             ) : (
-              <Text style={styles.messageText}>
+              <Text style={[styles.messageText, { color: isMe ? '#000000' : colors.textPrimary }]}>
                 {message.decryptedText ?? message.encryptedContent}
               </Text>
             )}
 
             <View style={styles.footerRow}>
-              <Lock size={10} color="#333333" style={{ marginRight: 4 }} />
-              <Text style={styles.timeText}>{time}</Text>
+              <Lock size={10} color={isMe ? '#333333' : colors.textSecondary} style={{ marginRight: 4 }} />
+              <Text style={[styles.timeText, { color: isMe ? '#333333' : colors.textSecondary }]}>{time}</Text>
               {isMe && (
                 <CheckCheck
                   size={12}
-                  color={message.isViewed ? BRUTALIST_COLORS.pink : '#555555'}
+                  color={message.isViewed ? colors.pink : (isDarkMode ? '#888888' : '#555555')}
                   style={{ marginLeft: 4 }}
                 />
               )}

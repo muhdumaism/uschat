@@ -13,6 +13,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Platform, PermissionsAndroid } from 'react-native';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { useChatStore } from './src/store/chatStore';
+import { useThemeStore } from './src/store/themeStore';
 
 async function requestNotificationPermission() {
   if (Platform.OS !== 'android') return;
@@ -31,8 +32,10 @@ async function requestNotificationPermission() {
 
 export default function App() {
   const initWsListeners = useChatStore((s) => s.initWsListeners);
+  const { isDarkMode, loadTheme } = useThemeStore();
 
   React.useEffect(() => {
+    loadTheme();
     initWsListeners();
     requestNotificationPermission();
   }, []);
@@ -40,8 +43,8 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <NavigationContainer>
-        <StatusBar style="light" />
-        <AppNavigator />
+        <StatusBar style={isDarkMode ? 'light' : 'dark'} />
+        <AppNavigator key={isDarkMode ? 'dark' : 'light'} />
       </NavigationContainer>
     </GestureHandlerRootView>
   );

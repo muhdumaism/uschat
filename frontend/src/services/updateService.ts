@@ -14,8 +14,8 @@ export interface VersionInfo {
   forceUpdate: boolean;
 }
 
-export const CURRENT_VERSION_CODE = 109;
-export const CURRENT_VERSION_NAME = '1.0.9';
+export const CURRENT_VERSION_CODE = 200;
+export const CURRENT_VERSION_NAME = '2.0.0';
 
 export interface DownloadProgressInfo {
   percent: number;
@@ -34,17 +34,7 @@ export const UpdateService = {
    * Check backend for latest version metadata
    */
   checkUpdateAvailable: async (): Promise<VersionInfo | null> => {
-    try {
-      const response = await axios.get<VersionInfo>(`${API_BASE_URL}/app/version`, { timeout: 5000 });
-      const data = response.data;
-      if (data && data.versionCode > CURRENT_VERSION_CODE) {
-        return data;
-      }
-      return null;
-    } catch (err: any) {
-      console.warn('[UpdateService] Version check failed:', err.message);
-      return null;
-    }
+    return null;
   },
 
   getActiveDownload: () => activeResumable,

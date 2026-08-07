@@ -1,4 +1,5 @@
 import { StyleSheet } from 'react-native';
+import { useThemeStore } from '../store/themeStore';
 
 export const BRUTALIST_COLORS = {
   background: '#FFFFFF',
@@ -28,11 +29,36 @@ export const BRUTALIST_STYLES = {
   borderRadius: 16,
   borderRadiusLarge: 20,
   borderRadiusSmall: 8,
-  
-  // Static shadow parameters (if using standard RN shadows)
   shadowOffset: 8,
-  
-  fontBold: 'monospace', // Fits the retro-brutalist outline aesthetic perfectly
+  fontBold: 'monospace',
+};
+
+export const useBrutalistTheme = () => {
+  const isDarkMode = useThemeStore((s) => s.isDarkMode);
+
+  const colors = isDarkMode
+    ? {
+        ...BRUTALIST_COLORS,
+        background: '#121212',
+        cardBg: '#1E1E1E',
+        border: '#FFFFFF',
+        shadow: '#FFFFFF',
+        textPrimary: '#FFFFFF',
+        textSecondary: '#DDDDDD',
+        textMuted: '#AAAAAA',
+      }
+    : {
+        ...BRUTALIST_COLORS,
+        background: '#FFFFFF',
+        cardBg: '#FFFFFF',
+        border: '#000000',
+        shadow: '#000000',
+        textPrimary: '#000000',
+        textSecondary: '#333333',
+        textMuted: '#666666',
+      };
+
+  return { colors, isDarkMode };
 };
 
 export const brutalistStyles = StyleSheet.create({

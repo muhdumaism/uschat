@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, StyleProp, ViewStyle } from 'react-native';
-import { BRUTALIST_COLORS, BRUTALIST_STYLES } from '../theme/brutalistTheme';
+import { BRUTALIST_COLORS, BRUTALIST_STYLES, useBrutalistTheme } from '../theme/brutalistTheme';
 
 interface BrutalistCardProps {
   children?: React.ReactNode;
@@ -17,12 +17,17 @@ export const BrutalistCard: React.FC<BrutalistCardProps> = ({
   children,
   style,
   contentStyle,
-  accentColor = BRUTALIST_COLORS.cardBg,
-  shadowColor = BRUTALIST_COLORS.shadow,
+  accentColor,
+  shadowColor,
   borderRadius = BRUTALIST_STYLES.borderRadius,
   borderWidth = BRUTALIST_STYLES.borderWidth,
   padding = 16,
 }) => {
+  const { colors } = useBrutalistTheme();
+  const cardBg = accentColor || colors.cardBg;
+  const cardShadow = shadowColor || colors.shadow;
+  const cardBorder = colors.border;
+
   // Extract layout/sizing styles to apply to both layers so they align and size identically
   const flat = StyleSheet.flatten(style) || {};
   const outerKeys = [
@@ -55,15 +60,15 @@ export const BrutalistCard: React.FC<BrutalistCardProps> = ({
 
   return (
     <View style={[styles.outerContainer, outerStyle]}>
-      {/* Black Hard Shadow Layer */}
+      {/* Black/White Hard Shadow Layer */}
       <View
         style={[
           styles.shadowLayer,
           {
-            backgroundColor: shadowColor,
+            backgroundColor: cardShadow,
             borderRadius: borderRadius,
             borderWidth: borderWidth,
-            borderColor: BRUTALIST_COLORS.border,
+            borderColor: cardBorder,
           },
         ]}
       />
@@ -74,10 +79,10 @@ export const BrutalistCard: React.FC<BrutalistCardProps> = ({
           styles.contentLayer,
           innerStyle,
           {
-            backgroundColor: accentColor,
+            backgroundColor: cardBg,
             borderRadius: borderRadius,
             borderWidth: borderWidth,
-            borderColor: BRUTALIST_COLORS.border,
+            borderColor: cardBorder,
             padding: padding,
           },
           contentStyle,
