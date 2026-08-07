@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, StatusBar, Platform, Image, Modal, ActivityIndicator, Alert, ScrollView } from 'react-native';
-import { Search, Plus, Lock, Phone, User as UserIcon, Settings as SettingsIcon, ShieldCheck, X, Calendar } from 'lucide-react-native';
+import { Search, Plus, Phone, User as UserIcon, Settings as SettingsIcon, Mail, Music, ArrowRight, ShieldCheck } from 'lucide-react-native';
 import { apiClient } from '../../api/client';
-import { GlassCard } from '../../components/GlassCard';
-import { GlassInput } from '../../components/GlassInput';
+import { RetroWindow } from '../../components/RetroWindow';
+import { RetroButton } from '../../components/RetroButton';
+import { RetroTextInput } from '../../components/RetroTextInput';
+import { RetroPanel } from '../../components/RetroPanel';
 import { Avatar } from '../../components/Avatar';
 import { UpdateModal } from '../../components/UpdateModal';
-import { COLORS } from '../../theme/colors';
+import { RETRO_COLORS, RETRO_STYLES } from '../../theme/retroTheme';
 import { useChatStore, ChatItem } from '../../store/chatStore';
+import { useMusicStore } from '../../store/musicStore';
 
 export const HomeScreen: React.FC<any> = ({ navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -16,6 +19,7 @@ export const HomeScreen: React.FC<any> = ({ navigation }) => {
   const [loadingCalls, setLoadingCalls] = useState(false);
 
   const { chats, fetchChats, setActiveChat, onlineUsers, initWsListeners } = useChatStore();
+  const { currentTrack, isPlaying, pauseTrack, resumeTrack } = useMusicStore();
 
   useEffect(() => {
     fetchChats();
@@ -40,7 +44,7 @@ export const HomeScreen: React.FC<any> = ({ navigation }) => {
       setLoadingCalls(true);
       setShowCallsModal(true);
       const res = await apiClient.get('/calls/history');
-      setCallsList(res.data);
+      setCallsList(res.data || []);
     } catch (err) {
       console.error('Fetch calls error:', err);
       Alert.alert('ERROR', 'UNABLE TO RETRIEVE CALL HISTORY');
@@ -68,9 +72,9 @@ export const HomeScreen: React.FC<any> = ({ navigation }) => {
           navigation.navigate('Chat', { chatId: item.id, name: item.name, peerUsername: item.peerUsername });
         }}
       >
-        <GlassCard style={styles.chatCard}>
+        <RetroPanel raised={false} style={styles.chatCard}>
           <View style={styles.row}>
-            <Avatar name={item.name} uri={item.avatar} isOnline={isOnline} size={50} />
+            <Avatar name={item.name} uri={item.avatar} isOnline={isOnline} size={42} />
 
             <View style={styles.chatInfo}>
               <View style={styles.nameRow}>
@@ -82,12 +86,18 @@ export const HomeScreen: React.FC<any> = ({ navigation }) => {
                 {item.peerUsername ? (
                   <Text style={styles.handleText}>@{item.peerUsername.toLowerCase()}</Text>
                 ) : (
-                  <Text style={styles.handleText}>SECURED STORAGE</Text>
+                  <Text style={styles.handleText}>SECURED GROUP ROUTE</Text>
+                )}
+                {item.lastMessage && (
+                  <Text style={styles.lastMsgPreview} numberOfLines={1}>
+                    {item.lastMessage.encryptedContent}
+                  </Text>
                 )}
               </View>
             </View>
+            <ArrowRight size={14} color="#808080" />
           </View>
-        </GlassCard>
+        </RetroPanel>
       </TouchableOpacity>
     );
   };
@@ -95,136 +105,164 @@ export const HomeScreen: React.FC<any> = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-
-      {/* Top Phone Status Bar Notch Clearance Spacer */}
       <View style={styles.statusBarSpacer} />
 
-      <View style={styles.header}>
-        <View style={styles.brandContainer}>
-          <View style={styles.brandBadge}>
+      <RetroWindow
+        title="CONVERSATIONS.EXE"
+        showControls={false}
+        contentStyle={styles.windowContent}
+        style={styles.mainWindow}
+      >
+        {/* Upper Menu Actions Panel */}
+        <View style={styles.actionToolbar}>
+          <View style={styles.leftToolbar}>
             <Image
               source={require('../../../assets/uschatlogo-trans.png')}
-              style={styles.logoImage}
+              style={styles.logo}
               resizeMode="contain"
             />
-          </View>
-          <View>
-            <Text style={styles.headerTitle}>USCHAT</Text>
-            <Text style={styles.headerSubtitle}>ONLINE / SECURED</Text>
-          </View>
-        </View>
-
-        <View style={styles.headerActions}>
-          <TouchableOpacity onPress={fetchCallHistory} style={styles.iconBtn}>
-            <Phone size={18} color="#FFFFFF" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={styles.iconBtn}>
-            <UserIcon size={18} color="#FFFFFF" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate('Settings')} style={styles.iconBtn}>
-            <SettingsIcon size={18} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <View style={styles.searchContainer}>
-        <GlassInput
-          placeholder="SEARCH BY HANDLE OR NAME..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          icon={<Search size={18} color="#FFFFFF" />}
-        />
-      </View>
-
-      <FlatList
-        data={filteredChats}
-        keyExtractor={(item) => item.id}
-        renderItem={renderChatItem}
-        contentContainerStyle={styles.listContent}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconBox}>
-              <Lock size={32} color="#FFFFFF" />
+            <View>
+              <Text style={styles.toolbarTitle}>USCHAT SECURE</Text>
+              <Text style={styles.toolbarSub}>ONLINE / E2EE ACTIVE</Text>
             </View>
-            <Text style={styles.emptyTitle}>NO ACTIVE CONVERSATIONS</Text>
-            <Text style={styles.emptySubtitle}>START A NEW CHAT BY GENERATING A SECURED ROUTE BELOW.</Text>
           </View>
-        }
-      />
+          
+          <View style={styles.rightToolbar}>
+            <RetroButton onPress={() => navigation.navigate('Music')} style={styles.iconBtn}>
+              <Music size={14} color="#000" />
+            </RetroButton>
+            <RetroButton onPress={() => navigation.navigate('MessageRequests')} style={styles.iconBtn}>
+              <Mail size={14} color="#000" />
+            </RetroButton>
+            <RetroButton onPress={fetchCallHistory} style={styles.iconBtn}>
+              <Phone size={14} color="#000" />
+            </RetroButton>
+            <RetroButton onPress={() => navigation.navigate('Profile')} style={styles.iconBtn}>
+              <UserIcon size={14} color="#000" />
+            </RetroButton>
+            <RetroButton onPress={() => navigation.navigate('Settings')} style={styles.iconBtn}>
+              <SettingsIcon size={14} color="#000" />
+            </RetroButton>
+          </View>
+        </View>
 
-      <TouchableOpacity
-        activeOpacity={0.8}
-        onPress={() => navigation.navigate('CreateChat')}
-        style={styles.fab}
-      >
-        <Plus size={26} color="#FFFFFF" />
-      </TouchableOpacity>
+        {/* Search Panel */}
+        <View style={styles.searchRow}>
+          <RetroTextInput
+            placeholder="SEARCH BY HANDLE OR NAME..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            icon={<Search size={16} color="#808080" />}
+            containerStyle={{ flex: 1 }}
+          />
+          <RetroButton
+            onPress={() => navigation.navigate('CreateChat')}
+            style={{ marginLeft: 6 }}
+          >
+            <Plus size={14} color="#000" style={{ marginRight: 4 }} />
+            <Text style={styles.addBtnText}>ADD</Text>
+          </RetroButton>
+        </View>
+
+        {/* Sunken list content area */}
+        <RetroPanel raised={false} style={styles.listContainerPanel}>
+          <FlatList
+            data={filteredChats}
+            keyExtractor={(item) => item.id}
+            renderItem={renderChatItem}
+            contentContainerStyle={styles.listContent}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <ShieldCheck size={28} color="#808080" style={{ marginBottom: 8 }} />
+                <Text style={styles.emptyTitle}>NO CONVERSATIONS ROUTED</Text>
+                <Text style={styles.emptySubtitle}>TAP [+] TO ESTABLISH AN E2EE DM OR GROUP ROUTE.</Text>
+              </View>
+            }
+          />
+        </RetroPanel>
+      </RetroWindow>
+
+      {/* Mini Music Player Dock */}
+      {currentTrack && (
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => navigation.navigate('Music')}
+          style={styles.miniPlayerDock}
+        >
+          <RetroPanel raised style={styles.miniPlayerPanel}>
+            <View style={styles.miniPlayerRow}>
+              <Music size={14} color="#000" style={{ marginRight: 8 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.miniPlayerTitle} numberOfLines={1}>
+                  {currentTrack.title.toUpperCase()}
+                </Text>
+                <Text style={styles.miniPlayerArtist} numberOfLines={1}>
+                  {currentTrack.artist}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={(e) => {
+                  e.stopPropagation();
+                  isPlaying ? pauseTrack() : resumeTrack();
+                }}
+                style={styles.miniPlayerPlayBtn}
+              >
+                {isPlaying ? (
+                  <ActivityIndicator size="small" color="#000" />
+                ) : (
+                  <Text style={{ fontSize: 9, fontFamily: 'monospace', fontWeight: 'bold' }}>PLAY</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </RetroPanel>
+        </TouchableOpacity>
+      )}
 
       {/* Call History Modal */}
       <Modal
         visible={showCallsModal}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setShowCallsModal(false)}
       >
         <View style={styles.modalBackdrop}>
-          {/* Header */}
-          <View style={styles.modalHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Phone size={22} color="#FFFFFF" style={{ marginRight: 10 }} />
-              <Text style={styles.modalTitle}>CALL HISTORY</Text>
-            </View>
-            <TouchableOpacity onPress={() => setShowCallsModal(false)} style={styles.closeBtn}>
-              <X size={20} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-
-          {/* List content */}
-          {loadingCalls ? (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-              <ActivityIndicator size="large" color="#FFFFFF" />
-            </View>
-          ) : (
-            <FlatList
-              data={callsList}
-              keyExtractor={(item) => item.id}
-              contentContainerStyle={{ paddingBottom: 40 }}
-              renderItem={({ item }) => {
-                const dateStr = new Date(item.startedAt).toLocaleString([], {
-                  month: 'short',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                });
-                return (
-                  <GlassCard style={styles.modalCallCard}>
-                    <View style={{ flex: 1, marginRight: 10 }}>
-                      <Text style={styles.callInitiatorText} numberOfLines={1}>
-                        {item.initiator?.displayName?.toUpperCase() || item.initiator?.username?.toUpperCase() || 'SECURED CALL'}
+          <RetroWindow
+            title="CALL_HISTORY.EXE"
+            onClose={() => setShowCallsModal(false)}
+            style={{ width: 320, maxHeight: 420 }}
+          >
+            {loadingCalls ? (
+              <View style={{ padding: 40, alignItems: 'center' }}>
+                <ActivityIndicator color={RETRO_COLORS.primary} size="large" />
+              </View>
+            ) : (
+              <FlatList
+                data={callsList}
+                keyExtractor={(item) => item.id}
+                contentContainerStyle={{ padding: 6 }}
+                renderItem={({ item }) => (
+                  <RetroPanel raised={false} style={styles.modalCallCard}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.callInitiatorText}>
+                        {item.callerId === item.userId ? 'OUTGOING CALL' : 'INCOMING CALL'}
                       </Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 }}>
-                        <Calendar size={12} color="#A1A1AA" style={{ marginRight: 6 }} />
-                        <Text style={styles.callDateText}>{dateStr.toUpperCase()}</Text>
-                      </View>
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.callTypeText}>
-                        {item.type}
+                      <Text style={styles.callDateText}>
+                        {new Date(item.createdAt).toLocaleString()}
                       </Text>
                       <Text style={styles.callStatusText}>
-                        {item.status.toUpperCase()}
+                        STATUS: {item.status.toUpperCase()}
                       </Text>
                     </View>
-                  </GlassCard>
-                );
-              }}
-              ListEmptyComponent={
-                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 80 }}>
-                  <Text style={{ color: '#71717A', fontSize: 14, fontWeight: '700' }}>NO RECENT CALLS</Text>
-                </View>
-              }
-            />
-          )}
+                  </RetroPanel>
+                )}
+                ListEmptyComponent={
+                  <View style={{ padding: 40, alignItems: 'center' }}>
+                    <Text style={styles.emptyText}>NO RECENT CALL HISTORY</Text>
+                  </View>
+                }
+              />
+            )}
+          </RetroWindow>
         </View>
       </Modal>
 
@@ -236,89 +274,90 @@ export const HomeScreen: React.FC<any> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: RETRO_COLORS.desktop,
+    padding: 6,
   },
   statusBarSpacer: {
-    height: Platform.OS === 'android' ? 52 : 28,
-    backgroundColor: '#121212',
-    borderBottomWidth: 2,
-    borderColor: '#FFFFFF',
+    height: Platform.OS === 'android' ? 34 : 20,
   },
-  header: {
+  mainWindow: {
+    flex: 1,
+  },
+  windowContent: {
+    flex: 1,
+    padding: 6,
+  },
+  actionToolbar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 16,
-    backgroundColor: '#121212',
-    borderBottomWidth: 3,
-    borderColor: '#FFFFFF',
-    marginBottom: 20,
+    backgroundColor: RETRO_COLORS.windowBackground,
+    padding: 6,
+    borderBottomWidth: 2,
+    borderBottomColor: RETRO_COLORS.panelDark,
+    marginBottom: 8,
   },
-  brandContainer: {
+  leftToolbar: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  brandBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 0,
-    backgroundColor: '#000000',
-    borderColor: '#FFFFFF',
-    borderWidth: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-    padding: 6,
+  logo: {
+    width: 28,
+    height: 28,
+    marginRight: 8,
   },
-  logoImage: {
-    width: '100%',
-    height: '100%',
+  toolbarTitle: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
+    color: '#000',
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: 2,
-  },
-  headerSubtitle: {
-    fontSize: 10,
-    color: COLORS.primary,
-    fontWeight: '900',
-    letterSpacing: 1,
+  toolbarSub: {
+    fontSize: 8,
+    fontFamily: 'monospace',
+    color: '#008000',
     marginTop: 1,
   },
-  headerActions: {
+  rightToolbar: {
     flexDirection: 'row',
+    gap: 4,
   },
   iconBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 0,
-    backgroundColor: '#000000',
-    borderColor: '#FFFFFF',
-    borderWidth: 2,
+    width: 26,
+    height: 24,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 8,
-    shadowColor: '#FFFFFF',
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
   },
-  searchContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
+  searchRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  addBtnText: {
+    fontSize: 10,
+    fontFamily: 'monospace',
+    fontWeight: 'bold',
+  },
+  listContainerPanel: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderTopColor: RETRO_COLORS.panelDark,
+    borderLeftColor: RETRO_COLORS.panelDark,
+    borderRightColor: RETRO_COLORS.panelLight,
+    borderBottomColor: RETRO_COLORS.panelLight,
+    padding: 4,
   },
   listContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 100,
+    paddingBottom: 80,
   },
   chatCard: {
-    marginBottom: 16,
-    padding: 16,
-    borderWidth: 2.5,
+    marginBottom: 6,
+    padding: 8,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   row: {
     flexDirection: 'row',
@@ -326,7 +365,8 @@ const styles = StyleSheet.create({
   },
   chatInfo: {
     flex: 1,
-    marginLeft: 14,
+    marginLeft: 10,
+    marginRight: 6,
   },
   nameRow: {
     flexDirection: 'row',
@@ -334,140 +374,127 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   chatName: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '900',
-    letterSpacing: 1,
+    color: '#000',
+    fontSize: 12,
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
   },
   timeText: {
-    color: '#A1A1AA',
-    fontSize: 11,
-    fontWeight: '700',
+    color: '#808080',
+    fontSize: 9,
+    fontFamily: 'monospace',
   },
   subRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 4,
+    alignItems: 'center',
+    marginTop: 2,
   },
   handleText: {
-    color: '#A1A1AA',
-    fontSize: 13,
-    fontWeight: '600',
+    color: '#555',
+    fontSize: 10,
+    fontFamily: 'monospace',
+  },
+  lastMsgPreview: {
+    color: '#808080',
+    fontSize: 9,
+    fontFamily: 'monospace',
+    flex: 1,
+    textAlign: 'right',
+    marginLeft: 10,
   },
   emptyContainer: {
     alignItems: 'center',
-    marginTop: 80,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    backgroundColor: '#121212',
-    padding: 30,
-  },
-  emptyIconBox: {
-    width: 64,
-    height: 64,
-    borderRadius: 0,
-    backgroundColor: '#000000',
-    borderColor: '#FFFFFF',
-    borderWidth: 2,
     justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
+    paddingVertical: 80,
+    paddingHorizontal: 20,
   },
   emptyTitle: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '900',
-    letterSpacing: 1.5,
+    color: '#555',
+    fontSize: 12,
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
     textAlign: 'center',
   },
   emptySubtitle: {
-    color: '#A1A1AA',
-    fontSize: 12,
+    color: '#808080',
+    fontSize: 9,
     textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 18,
-    fontWeight: '600',
+    marginTop: 6,
+    lineHeight: 13,
+    fontFamily: 'monospace',
   },
-  fab: {
+  miniPlayerDock: {
     position: 'absolute',
-    bottom: 28,
-    right: 24,
-    width: 60,
-    height: 60,
-    borderRadius: 0,
-    backgroundColor: COLORS.primary,
-    borderColor: '#FFFFFF',
-    borderWidth: 3,
+    bottom: 12,
+    left: 12,
+    right: 12,
+    zIndex: 99,
+  },
+  miniPlayerPanel: {
+    padding: 6,
+  },
+  miniPlayerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  miniPlayerTitle: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
+    color: '#000000',
+  },
+  miniPlayerArtist: {
+    fontSize: 7,
+    fontFamily: 'monospace',
+    color: '#555555',
+    marginTop: 1,
+  },
+  miniPlayerPlayBtn: {
+    width: 36,
+    height: 20,
+    backgroundColor: '#d4d0c8',
+    borderWidth: 1,
+    borderColor: '#808080',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#FFFFFF',
-    shadowOffset: { width: 4, height: 4 },
-    shadowOpacity: 1,
-    shadowRadius: 0,
-    elevation: 6,
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.96)',
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-    paddingBottom: 16,
-    borderBottomWidth: 3,
-    borderColor: '#FFFFFF',
-  },
-  modalTitle: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '900',
-    letterSpacing: 2,
-  },
-  closeBtn: {
-    width: 40,
-    height: 40,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    backgroundColor: '#121212',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalCallCard: {
-    marginBottom: 14,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#121212',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
+    marginBottom: 6,
+    padding: 10,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#d4d0c8',
   },
   callInitiatorText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '900',
-    letterSpacing: 0.5,
+    color: '#000',
+    fontSize: 12,
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
   },
   callDateText: {
-    color: '#A1A1AA',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  callTypeText: {
-    color: COLORS.primary,
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 1,
+    color: '#555',
+    fontSize: 10,
+    fontFamily: 'monospace',
+    marginTop: 2,
   },
   callStatusText: {
-    color: '#A1A1AA',
+    color: '#808080',
+    fontSize: 9,
+    fontFamily: 'monospace',
+    marginTop: 2,
+  },
+  emptyText: {
+    color: '#555',
     fontSize: 11,
-    marginTop: 4,
-    fontWeight: '700',
+    fontFamily: 'monospace',
+    fontWeight: 'bold',
   },
 });

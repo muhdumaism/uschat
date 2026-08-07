@@ -8,9 +8,13 @@ import { ChatScreen } from '../screens/Chat/ChatScreen';
 import { CreateChatScreen } from '../screens/Chat/CreateChatScreen';
 import { ProfileScreen } from '../screens/Profile/ProfileScreen';
 import { SettingsScreen } from '../screens/Settings/SettingsScreen';
+import { MessageRequestsScreen } from '../screens/Chat/MessageRequestsScreen';
+import { MusicScreen } from '../screens/Music/MusicScreen';
+import { GroupSettingsScreen } from '../screens/Chat/GroupSettingsScreen';
 import { useNavigation } from '@react-navigation/native';
 import { ActivityIndicator, View, NativeEventEmitter, NativeModules, Platform } from 'react-native';
 import { COLORS } from '../theme/colors';
+import { RETRO_COLORS } from '../theme/retroTheme';
 
 const Stack = createNativeStackNavigator();
 
@@ -61,15 +65,15 @@ export const AppNavigator = () => {
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, backgroundColor: COLORS.background, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
+      <View style={{ flex: 1, backgroundColor: RETRO_COLORS.desktop, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={RETRO_COLORS.primary} />
       </View>
     );
   }
 
   return (
     <>
-      <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: COLORS.background } }}>
+      <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: RETRO_COLORS.desktop } }}>
         {!isAuthenticated ? (
           <>
             <Stack.Screen name="Login" component={LoginScreen} />
@@ -82,6 +86,9 @@ export const AppNavigator = () => {
             <Stack.Screen name="CreateChat" component={CreateChatScreen} />
             <Stack.Screen name="Profile" component={ProfileScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="MessageRequests" component={MessageRequestsScreen} />
+            <Stack.Screen name="Music" component={MusicScreen} />
+            <Stack.Screen name="GroupSettings" component={GroupSettingsScreen} />
           </>
         )}
       </Stack.Navigator>

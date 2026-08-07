@@ -9,14 +9,16 @@ import {
   StatusBar,
   Platform,
   ActivityIndicator,
+  Image,
 } from 'react-native';
-import { ArrowLeft, Camera, User, FileText, Mail, LogOut, Check, ShieldCheck } from 'lucide-react-native';
+import { Camera, User, FileText, LogOut, ShieldAlert } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { GlassCard } from '../../components/GlassCard';
-import { GlassInput } from '../../components/GlassInput';
-import { Button } from '../../components/Button';
+import { RetroWindow } from '../../components/RetroWindow';
+import { RetroButton } from '../../components/RetroButton';
+import { RetroTextInput } from '../../components/RetroTextInput';
+import { RetroPanel } from '../../components/RetroPanel';
 import { Avatar } from '../../components/Avatar';
-import { COLORS } from '../../theme/colors';
+import { RETRO_COLORS, RETRO_STYLES } from '../../theme/retroTheme';
 import { useAuthStore } from '../../store/authStore';
 import { apiClient, API_BASE_URL } from '../../api/client';
 
@@ -115,87 +117,88 @@ export const ProfileScreen: React.FC<any> = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-
-      {/* Notch clearance spacer */}
       <View style={styles.statusBarSpacer} />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <ArrowLeft size={22} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Edit Profile</Text>
-        <View style={{ width: 38 }} />
-      </View>
-
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Avatar Container */}
-        <View style={styles.avatarWrapper}>
-          <View style={styles.avatarCircle}>
-            <Avatar name={user?.displayName || user?.username || 'User'} uri={avatarUrl} size={110} />
-            {uploadingImage && (
-              <View style={styles.uploadOverlay}>
-                <ActivityIndicator color="#FFF" size="large" />
+      <RetroWindow
+        title="USER_PROFILE.EXE"
+        onClose={() => navigation.goBack()}
+        contentStyle={styles.windowContent}
+        style={styles.mainWindow}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          {/* Avatar Profile Box */}
+          <RetroPanel raised style={styles.avatarPanel}>
+            <View style={styles.avatarRow}>
+              <View style={styles.avatarBezel}>
+                <Avatar name={user?.displayName || user?.username || 'User'} uri={avatarUrl} size={90} />
+                {uploadingImage && (
+                  <View style={styles.uploadOverlay}>
+                    <ActivityIndicator color="#FFF" size="small" />
+                  </View>
+                )}
               </View>
-            )}
-            <TouchableOpacity activeOpacity={0.8} onPress={handlePickAvatar} style={styles.cameraBadge}>
-              <Camera size={18} color="#FFF" />
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.usernameText}>@{user?.username}</Text>
-          <Text style={styles.emailText}>{user?.email}</Text>
-        </View>
+              
+              <View style={styles.avatarMeta}>
+                <Text style={styles.usernameText}>@{user?.username?.toUpperCase()}</Text>
+                <Text style={styles.emailText}>{user?.email}</Text>
+                <RetroButton onPress={handlePickAvatar} style={styles.cameraBtn}>
+                  <Camera size={12} color="#000" style={{ marginRight: 6 }} />
+                  <Text style={styles.btnText}>CHANGE PHOTO</Text>
+                </RetroButton>
+              </View>
+            </View>
+          </RetroPanel>
 
-        {/* Profile Edit Card */}
-        <GlassCard style={styles.card}>
-          <Text style={styles.cardSectionTitle}>Personal Info</Text>
-
-          <View style={styles.inputGap}>
-            <Text style={styles.fieldLabel}>Display Name</Text>
-            <GlassInput
-              placeholder="Display Name"
+          {/* Edit Form */}
+          <Text style={styles.sectionTitle}>PERSONAL DETAILS</Text>
+          <RetroPanel raised style={styles.formPanel}>
+            <Text style={styles.label}>DISPLAY NAME</Text>
+            <RetroTextInput
+              placeholder="DISPLAY NAME"
               value={displayName}
               onChangeText={setDisplayName}
-              icon={<User size={18} color={COLORS.textMuted} />}
+              icon={<User size={16} color="#000" />}
+              containerStyle={{ marginBottom: 12 }}
             />
-          </View>
 
-          <View style={styles.inputGap}>
-            <Text style={styles.fieldLabel}>Bio</Text>
-            <GlassInput
+            <Text style={styles.label}>BIO / STATUS PACKET</Text>
+            <RetroTextInput
               placeholder="Tell others about yourself..."
               value={bio}
               onChangeText={setBio}
               multiline
-              icon={<FileText size={18} color={COLORS.textMuted} />}
+              icon={<FileText size={16} color="#000" />}
+              containerStyle={{ marginBottom: 16 }}
             />
-          </View>
 
-          <Button
-            title="Save Profile Changes"
-            onPress={handleSaveProfile}
-            loading={loading}
-            style={styles.saveBtn}
-          />
-        </GlassCard>
+            <RetroButton
+              title={loading ? "SAVING..." : "OK (SAVE CHANGES)"}
+              onPress={handleSaveProfile}
+              disabled={loading}
+            />
+          </RetroPanel>
 
-        {/* Security & System Info */}
-        <GlassCard style={[styles.card, { marginTop: 16 }]}>
-          <View style={styles.infoRow}>
-            <ShieldCheck size={20} color={COLORS.success} />
-            <View style={styles.infoTextGroup}>
-              <Text style={styles.infoTitle}>End-to-End Encryption Active</Text>
-              <Text style={styles.infoSub}>Your Signal E2EE Key Pair is stored locally on this device.</Text>
+          {/* Security Info Card */}
+          <RetroPanel raised style={styles.infoPanel}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <ShieldAlert size={16} color="#000080" style={{ marginRight: 8 }} />
+              <Text style={styles.infoTitle}>IDENTITY SECURITY ACTIVE</Text>
             </View>
-          </View>
-        </GlassCard>
+            <Text style={styles.infoSub}>
+              Cryptographic keys verified. Peer connections are isolated and secure.
+            </Text>
+          </RetroPanel>
 
-        {/* Logout */}
-        <TouchableOpacity activeOpacity={0.8} onPress={logout} style={styles.logoutBtn}>
-          <LogOut size={20} color={COLORS.danger} />
-          <Text style={styles.logoutText}>Log Out of USCHAT</Text>
-        </TouchableOpacity>
-      </ScrollView>
+          <RetroButton
+            onPress={logout}
+            style={styles.logoutBtn}
+            textStyle={{ color: '#800000' }}
+          >
+            <LogOut size={14} color="#800000" style={{ marginRight: 8 }} />
+            <Text style={styles.logoutText}>DISCONNECT ACCOUNT SESSION</Text>
+          </RetroButton>
+        </ScrollView>
+      </RetroWindow>
     </View>
   );
 };
@@ -203,127 +206,120 @@ export const ProfileScreen: React.FC<any> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: RETRO_COLORS.desktop,
+    padding: 6,
   },
   statusBarSpacer: {
-    height: Platform.OS === 'android' ? 52 : 28,
-    backgroundColor: COLORS.background,
+    height: Platform.OS === 'android' ? 34 : 20,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+  mainWindow: {
+    flex: 1,
   },
-  backBtn: {
-    padding: 8,
-  },
-  headerTitle: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: '800',
+  windowContent: {
+    flex: 1,
+    padding: 6,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingVertical: 24,
+    padding: 6,
+    paddingBottom: 40,
   },
-  avatarWrapper: {
+  avatarPanel: {
+    padding: 10,
+    marginBottom: 12,
+  },
+  avatarRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 24,
   },
-  avatarCircle: {
-    position: 'relative',
+  avatarBezel: {
+    width: 96,
+    height: 96,
+    backgroundColor: '#fff',
+    ...RETRO_STYLES.borderSunken,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   uploadOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 55,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  cameraBadge: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.background,
-    borderWidth: 3,
+  avatarMeta: {
+    marginLeft: 16,
+    flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
   },
   usernameText: {
-    color: '#FFF',
-    fontSize: 20,
-    fontWeight: '800',
-    marginTop: 12,
+    fontSize: 14,
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
+    color: '#000',
   },
   emailText: {
-    color: COLORS.secondary,
-    fontSize: 13,
+    fontSize: 10,
+    fontFamily: 'monospace',
+    color: '#555',
     marginTop: 2,
+    marginBottom: 8,
   },
-  card: {
-    padding: 20,
-  },
-  cardSectionTitle: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 16,
-  },
-  fieldLabel: {
-    color: COLORS.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 6,
-  },
-  inputGap: {
-    marginBottom: 16,
-  },
-  saveBtn: {
-    marginTop: 8,
-  },
-  infoRow: {
+  cameraBtn: {
+    alignSelf: 'flex-start',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
     flexDirection: 'row',
-    alignItems: 'center',
   },
-  infoTextGroup: {
-    marginLeft: 12,
-    flex: 1,
+  btnText: {
+    fontSize: 9,
+    fontFamily: 'monospace',
+    fontWeight: 'bold',
+  },
+  sectionTitle: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
+    color: '#000',
+    marginTop: 10,
+    marginBottom: 6,
+    paddingLeft: 4,
+  },
+  formPanel: {
+    padding: 10,
+    marginBottom: 12,
+  },
+  label: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
+    color: '#000',
+    marginBottom: 4,
+  },
+  infoPanel: {
+    padding: 10,
+    marginBottom: 14,
   },
   infoTitle: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
+    color: '#000080',
   },
   infoSub: {
-    color: COLORS.textMuted,
-    fontSize: 12,
-    marginTop: 2,
-    lineHeight: 16,
+    fontSize: 9,
+    fontFamily: 'monospace',
+    color: '#555',
+    marginTop: 4,
+    lineHeight: 12,
   },
   logoutBtn: {
     flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 28,
-    marginBottom: 40,
-    paddingVertical: 14,
-    borderRadius: 16,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    borderColor: COLORS.danger,
-    borderWidth: 1,
+    backgroundColor: '#d4d0c8',
+    borderColor: '#800000',
   },
   logoutText: {
-    color: COLORS.danger,
-    fontSize: 15,
-    fontWeight: '700',
-    marginLeft: 10,
+    color: '#800000',
+    fontSize: 11,
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
   },
 });

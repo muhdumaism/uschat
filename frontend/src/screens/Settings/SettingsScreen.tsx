@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Platform, Alert, Switch, NativeModules } from 'react-native';
-import { ArrowLeft, Shield, Bell, Lock, Smartphone, HelpCircle, LogOut } from 'lucide-react-native';
-import { GlassCard } from '../../components/GlassCard';
-import { COLORS } from '../../theme/colors';
+import { Shield, Lock, Smartphone, LogOut, Settings, HelpCircle, CheckSquare, Square } from 'lucide-react-native';
+import { RetroWindow } from '../../components/RetroWindow';
+import { RetroButton } from '../../components/RetroButton';
+import { RetroPanel } from '../../components/RetroPanel';
+import { RETRO_COLORS, RETRO_STYLES } from '../../theme/retroTheme';
 import { useAuthStore } from '../../store/authStore';
 import { CURRENT_VERSION_NAME } from '../../services/updateService';
 
@@ -57,114 +59,120 @@ export const SettingsScreen: React.FC<any> = ({ navigation }) => {
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       <View style={styles.statusBarSpacer} />
 
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <ArrowLeft size={22} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Settings</Text>
-        <View style={{ width: 38 }} />
-      </View>
+      <RetroWindow
+        title="CONTROL_PANEL.EXE"
+        onClose={() => navigation.goBack()}
+        contentStyle={styles.windowContent}
+        style={styles.mainWindow}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          
+          {/* Security Panel */}
+          <Text style={styles.sectionTitle}>SECURITY & PRIVACY</Text>
+          <RetroPanel raised style={styles.sectionPanel}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => Alert.alert('Security Number', 'Signal E2EE Session Fingerprint Verified.')}
+              style={styles.settingItem}
+            >
+              <Shield size={16} color="#000" style={{ marginRight: 10 }} />
+              <View style={styles.textMeta}>
+                <Text style={styles.itemTitle}>END-TO-END ENCRYPTION</Text>
+                <Text style={styles.itemSub}>Signal keys and local session validation.</Text>
+              </View>
+            </TouchableOpacity>
 
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <GlassCard style={styles.card}>
-          <Text style={styles.sectionHeader}>Security & Privacy</Text>
+            <View style={styles.divider} />
 
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => Alert.alert('Security Number', 'Signal E2EE Session Fingerprint Verified.')}
-            style={styles.settingItem}
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => Alert.alert('Disappearing Messages', 'Default timer set to Off.')}
+              style={styles.settingItem}
+            >
+              <Lock size={16} color="#000" style={{ marginRight: 10 }} />
+              <View style={styles.textMeta}>
+                <Text style={styles.itemTitle}>DISAPPEARING MESSAGES</Text>
+                <Text style={styles.itemSub}>Configure ephemeral chat expire timers.</Text>
+              </View>
+            </TouchableOpacity>
+          </RetroPanel>
+
+          {/* Notifications Panel */}
+          <Text style={styles.sectionTitle}>NOTIFICATIONS</Text>
+          <RetroPanel raised style={styles.sectionPanel}>
+            <View style={styles.settingItemRow}>
+              <View style={styles.textMeta}>
+                <Text style={styles.itemTitle}>NOTIFICATION SOUNDS</Text>
+                <Text style={styles.itemSub}>Play sounds for incoming packets.</Text>
+              </View>
+              <Switch
+                value={soundEnabled}
+                onValueChange={toggleSound}
+                trackColor={{ false: '#808080', true: '#000080' }}
+                thumbColor={soundEnabled ? '#ffffff' : '#d4d0c8'}
+              />
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.settingItemRow}>
+              <View style={styles.textMeta}>
+                <Text style={styles.itemTitle}>VIBRATE PREFERENCE</Text>
+                <Text style={styles.itemSub}>Vibrate device on receipt.</Text>
+              </View>
+              <Switch
+                value={vibrationEnabled}
+                onValueChange={toggleVibration}
+                trackColor={{ false: '#808080', true: '#000080' }}
+                thumbColor={vibrationEnabled ? '#ffffff' : '#d4d0c8'}
+              />
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.settingItemRow}>
+              <View style={styles.textMeta}>
+                <Text style={styles.itemTitle}>CUSTOM WAV CHIME</Text>
+                <Text style={styles.itemSub}>Play classic retro notify sound.</Text>
+              </View>
+              <Switch
+                value={customSoundEnabled}
+                onValueChange={toggleCustomSound}
+                trackColor={{ false: '#808080', true: '#000080' }}
+                thumbColor={customSoundEnabled ? '#ffffff' : '#d4d0c8'}
+                disabled={!soundEnabled}
+              />
+            </View>
+          </RetroPanel>
+
+          {/* System Info Panel */}
+          <Text style={styles.sectionTitle}>SYSTEM INFO</Text>
+          <RetroPanel raised style={styles.sectionPanel}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => Alert.alert(`USCHAT v${CURRENT_VERSION_NAME}`, 'Connected to https://uschat.ruptyl.space')}
+              style={styles.settingItem}
+            >
+              <Smartphone size={16} color="#000" style={{ marginRight: 10 }} />
+              <View style={styles.textMeta}>
+                <Text style={styles.itemTitle}>ABOUT CLIENT</Text>
+                <Text style={styles.itemSub}>USCHAT build version {CURRENT_VERSION_NAME}.</Text>
+              </View>
+            </TouchableOpacity>
+          </RetroPanel>
+
+          {/* Log Out */}
+          <RetroButton
+            onPress={logout}
+            style={styles.logoutBtn}
+            textStyle={{ color: '#800000' }}
           >
-            <Shield size={20} color={COLORS.primary} />
-            <View style={styles.settingTextGroup}>
-              <Text style={styles.itemTitle}>End-to-End Encryption</Text>
-              <Text style={styles.itemSub}>Signal protocol keys and local encryption state</Text>
-            </View>
-          </TouchableOpacity>
+            <LogOut size={14} color="#800000" style={{ marginRight: 8 }} />
+            <Text style={styles.logoutText}>DISCONNECT SESSION (LOG OUT)</Text>
+          </RetroButton>
 
-          <View style={styles.divider} />
-
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => Alert.alert('Disappearing Messages', 'Default timer set to Off.')}
-            style={styles.settingItem}
-          >
-            <Lock size={20} color={COLORS.accent} />
-            <View style={styles.settingTextGroup}>
-              <Text style={styles.itemTitle}>Disappearing Messages</Text>
-              <Text style={styles.itemSub}>Set default timer for new chats</Text>
-            </View>
-          </TouchableOpacity>
-        </GlassCard>
-
-        <GlassCard style={[styles.card, { marginTop: 16 }]}>
-          <Text style={styles.sectionHeader}>Notification Preferences</Text>
-
-          <View style={styles.settingItemRow}>
-            <View style={styles.settingTextGroupRow}>
-              <Text style={styles.itemTitle}>Notification Sounds</Text>
-              <Text style={styles.itemSub}>Play sounds for incoming messages</Text>
-            </View>
-            <Switch
-              value={soundEnabled}
-              onValueChange={toggleSound}
-              trackColor={{ false: '#767577', true: COLORS.primary }}
-              thumbColor={soundEnabled ? '#FFF' : '#f4f3f4'}
-            />
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.settingItemRow}>
-            <View style={styles.settingTextGroupRow}>
-              <Text style={styles.itemTitle}>Vibrate</Text>
-              <Text style={styles.itemSub}>Vibrate on incoming messages</Text>
-            </View>
-            <Switch
-              value={vibrationEnabled}
-              onValueChange={toggleVibration}
-              trackColor={{ false: '#767577', true: COLORS.primary }}
-              thumbColor={vibrationEnabled ? '#FFF' : '#f4f3f4'}
-            />
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.settingItemRow}>
-            <View style={styles.settingTextGroupRow}>
-              <Text style={styles.itemTitle}>Use Custom USCHAT Sound</Text>
-              <Text style={styles.itemSub}>Toggle custom WAV chime or system default</Text>
-            </View>
-            <Switch
-              value={customSoundEnabled}
-              onValueChange={toggleCustomSound}
-              trackColor={{ false: '#767577', true: COLORS.primary }}
-              thumbColor={customSoundEnabled ? '#FFF' : '#f4f3f4'}
-              disabled={!soundEnabled}
-            />
-          </View>
-        </GlassCard>
-
-        <GlassCard style={[styles.card, { marginTop: 16 }]}>
-          <Text style={styles.sectionHeader}>App Info</Text>
-
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => Alert.alert(`USCHAT v${CURRENT_VERSION_NAME}`, 'Connected to https://uschat.ruptyl.space')}
-            style={styles.settingItem}
-          >
-            <Smartphone size={20} color={COLORS.success} />
-            <View style={styles.settingTextGroup}>
-              <Text style={styles.itemTitle}>About USCHAT</Text>
-              <Text style={styles.itemSub}>Version {CURRENT_VERSION_NAME} (Clean Minimal UI)</Text>
-            </View>
-          </TouchableOpacity>
-        </GlassCard>
-
-        <TouchableOpacity activeOpacity={0.8} onPress={logout} style={styles.logoutBtn}>
-          <LogOut size={20} color={COLORS.danger} />
-          <Text style={styles.logoutText}>Log Out</Text>
-        </TouchableOpacity>
-      </ScrollView>
+        </ScrollView>
+      </RetroWindow>
     </View>
   );
 };
@@ -172,93 +180,80 @@ export const SettingsScreen: React.FC<any> = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: RETRO_COLORS.desktop,
+    padding: 6,
   },
   statusBarSpacer: {
-    height: Platform.OS === 'android' ? 52 : 28,
-    backgroundColor: COLORS.background,
+    height: Platform.OS === 'android' ? 34 : 20,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+  mainWindow: {
+    flex: 1,
   },
-  backBtn: {
-    padding: 8,
-  },
-  headerTitle: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: '800',
+  windowContent: {
+    flex: 1,
+    padding: 6,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingVertical: 24,
+    padding: 6,
+    paddingBottom: 40,
   },
-  card: {
-    padding: 20,
+  sectionTitle: {
+    fontSize: 10,
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
+    color: '#000',
+    marginTop: 10,
+    marginBottom: 6,
+    paddingLeft: 4,
   },
-  sectionHeader: {
-    color: COLORS.secondary,
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 16,
+  sectionPanel: {
+    padding: 10,
+    marginBottom: 12,
   },
   settingItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
-  },
-  settingTextGroup: {
-    marginLeft: 14,
-    flex: 1,
-  },
-  itemTitle: {
-    color: '#FFF',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  itemSub: {
-    color: COLORS.textMuted,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.border,
-    marginVertical: 10,
-  },
-  logoutBtn: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 28,
-    paddingVertical: 14,
-    borderRadius: 16,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    borderColor: COLORS.danger,
-    borderWidth: 1,
-  },
-  logoutText: {
-    color: COLORS.danger,
-    fontSize: 15,
-    fontWeight: '700',
-    marginLeft: 10,
+    paddingVertical: 4,
   },
   settingItemRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 10,
+    paddingVertical: 4,
   },
-  settingTextGroupRow: {
+  textMeta: {
     flex: 1,
-    paddingRight: 10,
+    marginLeft: 6,
+  },
+  itemTitle: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
+    color: '#000',
+  },
+  itemSub: {
+    fontSize: 9,
+    fontFamily: 'monospace',
+    color: '#555',
+    marginTop: 2,
+  },
+  divider: {
+    height: 2,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: RETRO_COLORS.panelDark,
+    marginVertical: 10,
+  },
+  logoutBtn: {
+    flexDirection: 'row',
+    marginTop: 14,
+    backgroundColor: '#d4d0c8',
+    borderColor: '#800000',
+  },
+  logoutText: {
+    color: '#800000',
+    fontSize: 11,
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
   },
 });

@@ -16,7 +16,7 @@ import {
   Vibration,
   ActivityIndicator,
 } from 'react-native';
-import { ArrowLeft, Send, Eye, ShieldCheck, Lock, Reply, Trash2, Copy, Edit, Smile, Plus, Mic, Bell, BellOff } from 'lucide-react-native';
+import { ArrowLeft, Send, Eye, ShieldCheck, Lock, Reply, Trash2, Copy, Edit, Smile, Plus, Mic, Bell, BellOff, Pin } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system';
@@ -111,7 +111,7 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
   const [replyingToMessage, setReplyingToMessage] = useState<any>(null);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
 
-  const { messages, fetchMessages, sendMessage, editMessage, deleteMessage, reactToMessage } = useChatStore();
+  const { messages, fetchMessages, sendMessage, editMessage, deleteMessage, reactToMessage, chats } = useChatStore();
   const currentUser = useAuthStore((s) => s.user);
 
   // Voice recording states
@@ -360,6 +360,17 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
         bio: 'E2EE ROUTED IDENTITY CHANNEL.',
       });
       setShowProfileModal(true);
+    }
+  };
+
+  const chatItem = chats.find((c) => c.id === chatId);
+  const isGroup = chatItem ? chatItem.type === 'GROUP' : false;
+
+  const handleHeaderPress = () => {
+    if (isGroup) {
+      navigation.navigate('GroupSettings', { chatId, groupName: name });
+    } else {
+      handleOpenProfile();
     }
   };
 
@@ -645,7 +656,7 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
           <ArrowLeft size={22} color={COLORS.textPrimary} />
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={handleOpenProfile} style={styles.headerProfile}>
+        <TouchableOpacity onPress={handleHeaderPress} style={styles.headerProfile}>
           <Avatar name={name} size={38} />
           <View style={styles.headerTitleBox}>
             <Text style={styles.headerName}>{name}</Text>
@@ -955,6 +966,28 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
               >
                 <Trash2 size={20} color="#FF0000" style={{ marginRight: 12 }} />
                 <Text style={{ color: '#FF0000', fontSize: 15, fontWeight: '900', letterSpacing: 1 }}>DELETE FOR EVERYONE</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Pin Message (Only if Group Chat) */}
+            {isGroup && (
+              <TouchableOpacity
+                onPress={async () => {
+                  const msg = selectedMessage;
+                  setSelectedMessage(null);
+                  try {
+                    const res = await apiClient.post(`/chats/group/${chatId}/pin/${msg.id}`);
+                    Alert.alert(res.data.isPinned ? 'MESSAGE PINNED' : 'MESSAGE UNPINNED', 'ACTION COMPLETED.');
+                  } catch (e) {
+                    Alert.alert('ERROR', 'FAILED TO TOGGLE PIN STATE.');
+                  }
+                }}
+                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14 }}
+              >
+                <Pin size={20} color="#FFFFFF" style={{ marginRight: 12 }} />
+                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '900', letterSpacing: 1 }}>
+                  {selectedMessage?.isPinned ? 'UNPIN MESSAGE' : 'PIN MESSAGE'}
+                </Text>
               </TouchableOpacity>
             )}
           </View>
