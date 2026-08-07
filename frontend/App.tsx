@@ -15,7 +15,6 @@ import { AppNavigator } from './src/navigation/AppNavigator';
 import { useChatStore } from './src/store/chatStore';
 import { useThemeStore } from './src/store/themeStore';
 import { useMusicStore } from './src/store/musicStore';
-import { FloatingMiniPlayer } from './src/components/FloatingMiniPlayer';
 
 const navigationRef = createNavigationContainerRef();
 
@@ -64,7 +63,6 @@ export default function App() {
         <StatusBar style={isDarkMode ? 'light' : 'dark'} />
         <View style={{ flex: 1 }}>
           <AppNavigator key={isDarkMode ? 'dark' : 'light'} />
-          <FloatingMiniPlayer />
         </View>
       </NavigationContainer>
     </GestureHandlerRootView>

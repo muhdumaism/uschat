@@ -210,14 +210,18 @@ class USChatMediaSessionModule(reactContext: ReactApplicationContext) : ReactCon
         val nextIntent = Intent(context, USChatMediaButtonReceiver::class.java).apply { action = "com.uschat.app.NEXT" }
         val nextPending = PendingIntent.getBroadcast(context, 3, nextIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
+        // Brutalist-style: uppercase text, dark colorized background, yellow accent
         val notificationBuilder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setContentTitle(title)
-            .setContentText(artist)
-            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setContentTitle(title.uppercase())
+            .setContentText(artist.uppercase())
+            .setSubText("USCHAT MUSIC")
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(pendingIntent)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(isPlayingState)
             .setSilent(true)
+            .setColor(0xFFFFD600.toInt()) // Brutalist yellow accent
+            .setColorized(true) // Dark colorized background matching in-app style
             .setStyle(
                 androidx.media.app.NotificationCompat.MediaStyle()
                     .setMediaSession(session.sessionToken)
@@ -230,13 +234,13 @@ class USChatMediaSessionModule(reactContext: ReactApplicationContext) : ReactCon
             notificationBuilder.setLargeIcon(currentBitmap)
         }
 
-        notificationBuilder.addAction(android.R.drawable.ic_media_previous, "Previous", prevPending)
+        notificationBuilder.addAction(android.R.drawable.ic_media_previous, "PREV", prevPending)
 
         val playIcon = if (isPlayingState) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play
-        val playText = if (isPlayingState) "Play" else "Pause"
+        val playText = if (isPlayingState) "PAUSE" else "PLAY"
         notificationBuilder.addAction(playIcon, playText, playPending)
 
-        notificationBuilder.addAction(android.R.drawable.ic_media_next, "Next", nextPending)
+        notificationBuilder.addAction(android.R.drawable.ic_media_next, "NEXT", nextPending)
 
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(NOTIFICATION_ID, notificationBuilder.build())
