@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiClient, API_BASE_URL } from '../api/client';
+import { NativeModules, DeviceEventEmitter, Platform } from 'react-native';
+
+const { USChatMediaSessionModule } = NativeModules;
 
 export interface Track {
   title: string;
@@ -43,6 +46,8 @@ interface MusicState {
   likeTrack: (track: Track) => Promise<void>;
   unlikeTrack: (trackUri: string) => Promise<void>;
   fetchLikedSongs: () => Promise<void>;
+  persistState: () => Promise<void>;
+  initStore: () => Promise<void>;
 }
 
 export const useMusicStore = create<MusicState>((set, get) => {
@@ -56,6 +61,11 @@ export const useMusicStore = create<MusicState>((set, get) => {
         duration: status.durationMillis || 0,
         isPlaying: status.isPlaying,
       });
+
+      // Sync with Android MediaSession
+      if (Platform.OS === 'android' && USChatMediaSessionModule) {
+        USChatMediaSessionModule.updatePlaybackState(status.isPlaying, status.positionMillis);
+      }
 
       if (status.didJustFinish) {
         get().nextTrack();
@@ -129,6 +139,19 @@ export const useMusicStore = create<MusicState>((set, get) => {
         );
 
         set({ sound });
+
+        // Sync with Android MediaSession metadata
+        if (Platform.OS === 'android' && USChatMediaSessionModule) {
+          USChatMediaSessionModule.updateMetadata(
+            track.title,
+            track.artist,
+            track.coverUrl || '',
+            track.duration * 1000
+          );
+          USChatMediaSessionModule.updatePlaybackState(true, 0);
+        }
+
+        get().persistState();
       } catch (err) {
         console.error('Audio play error:', err);
         set({ isPlaying: false });
@@ -141,6 +164,10 @@ export const useMusicStore = create<MusicState>((set, get) => {
         try {
           await state.sound.pauseAsync();
           set({ isPlaying: false });
+          if (Platform.OS === 'android' && USChatMediaSessionModule) {
+            USChatMediaSessionModule.updatePlaybackState(false, state.position);
+          }
+          get().persistState();
         } catch (e) {}
       }
     },
@@ -151,6 +178,10 @@ export const useMusicStore = create<MusicState>((set, get) => {
         try {
           await state.sound.playAsync();
           set({ isPlaying: true });
+          if (Platform.OS === 'android' && USChatMediaSessionModule) {
+            USChatMediaSessionModule.updatePlaybackState(true, state.position);
+          }
+          get().persistState();
         } catch (e) {}
       }
     },
@@ -161,12 +192,17 @@ export const useMusicStore = create<MusicState>((set, get) => {
         try {
           await state.sound.stopAsync();
           set({ isPlaying: false, position: 0 });
+          if (Platform.OS === 'android' && USChatMediaSessionModule) {
+            USChatMediaSessionModule.stopMediaSession();
+          }
+          get().persistState();
         } catch (e) {}
       }
     },
 
     setQueue: (tracks: Track[]) => {
       set({ queue: tracks, originalQueue: [...tracks] });
+      get().persistState();
     },
 
     nextTrack: async () => {
@@ -207,6 +243,10 @@ export const useMusicStore = create<MusicState>((set, get) => {
         try {
           await state.sound.setPositionAsync(millis);
           set({ position: millis });
+          if (Platform.OS === 'android' && USChatMediaSessionModule) {
+            USChatMediaSessionModule.updatePlaybackState(state.isPlaying, millis);
+          }
+          get().persistState();
         } catch (e) {}
       }
     },
@@ -222,6 +262,7 @@ export const useMusicStore = create<MusicState>((set, get) => {
       if (state.sound) {
         state.sound.setIsLoopingAsync(nextLoop);
       }
+      get().persistState();
     },
 
     toggleShuffle: () => {
@@ -243,6 +284,7 @@ export const useMusicStore = create<MusicState>((set, get) => {
         const origIdx = state.originalQueue.findIndex((t) => t.trackUri === state.currentTrack?.trackUri);
         set({ queue: state.originalQueue, queueIndex: origIdx !== -1 ? origIdx : 0 });
       }
+      get().persistState();
     },
 
     updateStatus: (status: any) => {
@@ -253,6 +295,7 @@ export const useMusicStore = create<MusicState>((set, get) => {
       const state = get();
       if (!state.queue.some(t => t.trackUri === track.trackUri)) {
         set({ queue: [...state.queue, track], originalQueue: [...state.originalQueue, track] });
+        get().persistState();
       }
     },
 
@@ -262,6 +305,7 @@ export const useMusicStore = create<MusicState>((set, get) => {
         queue: state.queue.filter(t => t.trackUri !== trackUri),
         originalQueue: state.originalQueue.filter(t => t.trackUri !== trackUri),
       });
+      get().persistState();
     },
 
     likeTrack: async (track: Track) => {
@@ -296,5 +340,110 @@ export const useMusicStore = create<MusicState>((set, get) => {
         console.warn('Failed to fetch liked songs:', e);
       }
     },
+
+    persistState: async () => {
+      const state = get();
+      try {
+        const data = {
+          currentTrack: state.currentTrack,
+          queue: state.queue,
+          queueIndex: state.queueIndex,
+          isLooping: state.isLooping,
+          isShuffled: state.isShuffled,
+          originalQueue: state.originalQueue,
+          position: state.position,
+        };
+        await AsyncStorage.setItem('@uschat/music_state', JSON.stringify(data));
+      } catch (e) {
+        console.warn('Failed to save music state:', e);
+      }
+    },
+
+    initStore: async () => {
+      try {
+        const saved = await AsyncStorage.getItem('@uschat/music_state');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          set({
+            currentTrack: parsed.currentTrack || null,
+            queue: parsed.queue || [],
+            queueIndex: parsed.queueIndex !== undefined ? parsed.queueIndex : -1,
+            isLooping: !!parsed.isLooping,
+            isShuffled: !!parsed.isShuffled,
+            originalQueue: parsed.originalQueue || [],
+            position: parsed.position || 0,
+          });
+
+          if (parsed.currentTrack) {
+            const token = await AsyncStorage.getItem('@uschat/token');
+            const streamUrl = `${API_BASE_URL}/music/stream?uri=${encodeURIComponent(parsed.currentTrack.trackUri)}`;
+
+            // Build audio session configuration
+            await Audio.setAudioModeAsync({
+              allowsRecordingIOS: false,
+              playsInSilentModeIOS: true,
+              staysActiveInBackground: true,
+              playThroughEarpieceAndroid: false,
+            });
+
+            const { sound } = await Audio.Sound.createAsync(
+              {
+                uri: streamUrl,
+                headers: {
+                  Authorization: `Bearer ${token || ''}`,
+                },
+              },
+              {
+                shouldPlay: false, // Start paused on launch
+                positionMillis: parsed.position || 0,
+                isLooping: !!parsed.isLooping,
+              },
+              onPlaybackStatusUpdate
+            );
+
+            set({ sound });
+
+            // Sync with Android MediaSession metadata as paused state
+            if (Platform.OS === 'android' && USChatMediaSessionModule) {
+              USChatMediaSessionModule.updateMetadata(
+                parsed.currentTrack.title,
+                parsed.currentTrack.artist,
+                parsed.currentTrack.coverUrl || '',
+                parsed.currentTrack.duration * 1000
+              );
+              USChatMediaSessionModule.updatePlaybackState(false, parsed.position || 0);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to load music state:', e);
+      }
+    },
   };
 });
+
+if (Platform.OS === 'android' && USChatMediaSessionModule) {
+  DeviceEventEmitter.addListener('onMediaSessionAction', async (event: any) => {
+    const { action, params } = event;
+    const store = useMusicStore.getState();
+    switch (action) {
+      case 'play':
+        await store.resumeTrack();
+        break;
+      case 'pause':
+        await store.pauseTrack();
+        break;
+      case 'next':
+        await store.nextTrack();
+        break;
+      case 'previous':
+        await store.prevTrack();
+        break;
+      case 'seekTo':
+        if (params && typeof params.position === 'number') {
+          await store.seekTrack(params.position);
+        }
+        break;
+    }
+  });
+}

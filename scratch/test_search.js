@@ -1,33 +1,18 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const axios = require('axios');
 
-async function testSearch(q, currentUserId) {
-  const queryClean = q.replace(/^@/, '').toLowerCase();
-  console.log(`Searching for "${queryClean}" (original "${q}")...`);
-  
-  const users = await prisma.user.findMany({
-    where: {
-      OR: [
-        { username: { contains: queryClean } },
-        { displayName: { contains: queryClean } },
-      ],
-      id: { not: currentUserId },
-    },
-    select: {
-      id: true,
-      username: true,
-      displayName: true,
-      avatarUrl: true,
-    },
-  });
-  
-  console.log('Result:', users);
-}
-
-async function main() {
-  const umaiseeId = "31c4ea98-b703-441a-93fe-63b2418084d8"; // umaisee
-  await testSearch('idk', umaiseeId);
-  await testSearch('@idk', umaiseeId);
-}
-
-main().catch(err => console.error(err)).finally(() => prisma.$disconnect());
+axios.get('http://uschat.ruptyl.space:2333/v4/loadtracks', {
+  params: { identifier: 'ytsearch:Kalyani' },
+  headers: { Authorization: 'muhdumaism@120' }
+}).then(res => {
+  const d = res.data;
+  console.log('loadType:', d.loadType);
+  console.log('dataType of data:', typeof d.data, Array.isArray(d.data));
+  if (Array.isArray(d.data) && d.data.length > 0) {
+    console.log('first item keys:', Object.keys(d.data[0]));
+    console.log('first item info:', d.data[0].info);
+  } else {
+    console.log('data content:', d);
+  }
+}).catch(err => {
+  console.error('ERROR:', err.message);
+});

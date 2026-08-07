@@ -7,13 +7,17 @@ if (typeof global.TextEncoder === 'undefined') {
 }
 
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { Platform, PermissionsAndroid } from 'react-native';
+import { Platform, PermissionsAndroid, View, DeviceEventEmitter } from 'react-native';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { useChatStore } from './src/store/chatStore';
 import { useThemeStore } from './src/store/themeStore';
+import { useMusicStore } from './src/store/musicStore';
+import { FloatingMiniPlayer } from './src/components/FloatingMiniPlayer';
+
+const navigationRef = createNavigationContainerRef();
 
 async function requestNotificationPermission() {
   if (Platform.OS !== 'android') return;
@@ -33,18 +37,35 @@ async function requestNotificationPermission() {
 export default function App() {
   const initWsListeners = useChatStore((s) => s.initWsListeners);
   const { isDarkMode, loadTheme } = useThemeStore();
+  const initStore = useMusicStore((s) => s.initStore);
+  const fetchLikedSongs = useMusicStore((s) => s.fetchLikedSongs);
 
   React.useEffect(() => {
     loadTheme();
     initWsListeners();
     requestNotificationPermission();
+    
+    // Initialize persistent music state and liked songs list on launch
+    initStore();
+    fetchLikedSongs();
   }, []);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <NavigationContainer>
+      <NavigationContainer
+        ref={navigationRef}
+        onStateChange={() => {
+          const currentRoute = navigationRef.getCurrentRoute();
+          if (currentRoute) {
+            DeviceEventEmitter.emit('onNavigationStateChange', currentRoute.name);
+          }
+        }}
+      >
         <StatusBar style={isDarkMode ? 'light' : 'dark'} />
-        <AppNavigator key={isDarkMode ? 'dark' : 'light'} />
+        <View style={{ flex: 1 }}>
+          <AppNavigator key={isDarkMode ? 'dark' : 'light'} />
+          <FloatingMiniPlayer />
+        </View>
       </NavigationContainer>
     </GestureHandlerRootView>
   );

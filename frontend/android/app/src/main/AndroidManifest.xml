@@ -46,6 +46,15 @@
     </activity>
     <activity android:name="com.facebook.react.devsupport.DevSettingsActivity" android:exported="false"/>
 
+    <receiver android:name=".USChatMediaButtonReceiver" android:exported="false">
+      <intent-filter>
+        <action android:name="com.uschat.app.PLAY" />
+        <action android:name="com.uschat.app.PAUSE" />
+        <action android:name="com.uschat.app.NEXT" />
+        <action android:name="com.uschat.app.PREVIOUS" />
+      </intent-filter>
+    </receiver>
+
     <provider
         android:name="androidx.core.content.FileProvider"
         android:authorities="${applicationId}.provider"

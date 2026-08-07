@@ -7,7 +7,6 @@ import { BrutalistButton } from '../../components/BrutalistButton';
 import { BrutalistTextInput } from '../../components/BrutalistTextInput';
 import { Avatar } from '../../components/Avatar';
 import { useChatStore, ChatItem } from '../../store/chatStore';
-import { useMusicStore } from '../../store/musicStore';
 
 const getLastMessageText = (lastMsg: any) => {
   if (!lastMsg) return '';
@@ -31,7 +30,6 @@ const getLastMessageText = (lastMsg: any) => {
 export const HomeScreen: React.FC<any> = ({ navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const { chats, fetchChats, setActiveChat, onlineUsers, initWsListeners } = useChatStore();
-  const { currentTrack, isPlaying, pauseTrack, resumeTrack } = useMusicStore();
   const { colors, isDarkMode } = useBrutalistTheme();
 
   useEffect(() => {
@@ -183,36 +181,6 @@ export const HomeScreen: React.FC<any> = ({ navigation }) => {
           </View>
         }
       />
-
-      {/* Brutalist Global Music Mini Player */}
-      {currentTrack && (
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={() => navigation.navigate('Music')}
-          style={styles.miniPlayerDock}
-        >
-          <BrutalistCard accentColor={colors.green} padding={10}>
-            <View style={styles.miniPlayerRow}>
-              <Music size={16} color={isDarkMode ? '#FFFFFF' : '#000000'} style={{ marginRight: 10 }} />
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.miniPlayerTitle, { color: isDarkMode ? '#FFFFFF' : '#000000' }]} numberOfLines={1}>
-                  {currentTrack.title.toUpperCase()}
-                </Text>
-                <Text style={[styles.miniPlayerArtist, { color: isDarkMode ? '#EEEEEE' : '#333333' }]} numberOfLines={1}>
-                  {currentTrack.artist.toUpperCase()}
-                </Text>
-              </View>
-              <BrutalistButton
-                onPress={isPlaying ? pauseTrack : resumeTrack}
-                style={styles.miniPlayerPlayBtn}
-                accentColor={colors.yellow}
-              >
-                <Text style={[styles.miniPlayBtnText, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}>{isPlaying ? 'PAUSE' : 'PLAY'}</Text>
-              </BrutalistButton>
-            </View>
-          </BrutalistCard>
-        </TouchableOpacity>
-      )}
     </View>
   );
 };

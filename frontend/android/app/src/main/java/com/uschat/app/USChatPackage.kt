@@ -11,6 +11,7 @@ class USChatPackage : ReactPackage {
     override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> {
         val modules = ArrayList<NativeModule>()
         modules.add(USChatModule(reactContext))
+        modules.add(USChatMediaSessionModule(reactContext))
         return modules
     }
 
