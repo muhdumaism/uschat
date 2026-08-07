@@ -2,9 +2,24 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import axios from 'axios';
 import ytdl from '@distube/ytdl-core';
+import fs from 'fs';
+import path from 'path';
 import { prisma } from '../prisma/client';
 import { authenticate } from '../middleware/auth.middleware';
 import { config } from '../config';
+
+// Load YouTube agent cookies from project root if it exists
+let ytdlAgent: any = undefined;
+try {
+  const cookiesPath = path.join(process.cwd(), 'youtube_cookies.json');
+  if (fs.existsSync(cookiesPath)) {
+    const cookies = JSON.parse(fs.readFileSync(cookiesPath, 'utf8'));
+    ytdlAgent = ytdl.createAgent(cookies);
+    console.log('[MusicRouter] Loaded YouTube cookies agent successfully from youtube_cookies.json.');
+  }
+} catch (err) {
+  console.warn('[MusicRouter] Failed to load youtube_cookies.json for ytdl agent:', err);
+}
 
 const searchSchema = z.object({
   q: z.string().min(1),
@@ -129,6 +144,7 @@ export async function musicRoutes(fastify: FastifyInstance) {
         filter: 'audioonly',
         quality: 'highestaudio',
         highWaterMark: 1 << 25, // 32MB buffer
+        agent: ytdlAgent,
       });
 
       audioStream.on('error', (err) => {
