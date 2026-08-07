@@ -156,7 +156,7 @@ export async function musicRoutes(fastify: FastifyInstance) {
   fastify.get('/stream', { preHandler: [authenticate] }, async (request, reply) => {
     const { uri } = z.object({ uri: z.string().url() }).parse(request.query);
     try {
-      fastify.log.info({ uri }, '[MusicRouter] Resolving stream with yt-dlp-exec...');
+      fastify.log.info({ uri }, '[MusicRouter] Resolving stream with yt-dlp-exec stdout pipe...');
 
       const jsonCookiesPath = path.join(process.cwd(), 'youtube_cookies.json');
       const netscapeCookiesPath = path.join(process.cwd(), 'youtube_cookies.txt');
@@ -173,7 +173,7 @@ export async function musicRoutes(fastify: FastifyInstance) {
       }
 
       const ytDlpOptions: any = {
-        getUrl: true,
+        output: '-',
         format: 'bestaudio',
         jsRuntimes: 'node:' + process.execPath,
       };
@@ -182,21 +182,23 @@ export async function musicRoutes(fastify: FastifyInstance) {
         ytDlpOptions.cookies = netscapeCookiesPath;
       }
 
-      const streamUrl = (await ytdlExec(uri, ytDlpOptions)) as any;
-      if (!streamUrl) {
-        throw new Error('yt-dlp-exec returned empty stream URL');
-      }
+      // Execute ytdl-exec and stream its stdout directly to Fastify response
+      const subprocess = (ytdlExec as any).exec(uri, ytDlpOptions);
 
-      fastify.log.info('[MusicRouter] Streaming format URL via Axios...');
-      const response = await axios.get(streamUrl.trim(), {
-        responseType: 'stream',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      // Kill the subprocess if the client disconnects/closes connection
+      request.raw.on('close', () => {
+        if (!subprocess.killed) {
+          fastify.log.info('[MusicRouter] Client disconnected, killing yt-dlp stream process...');
+          subprocess.kill();
         }
       });
 
+      subprocess.on('error', (err: any) => {
+        fastify.log.error(err, '[MusicRouter] yt-dlp subprocess error');
+      });
+
       reply.header('Content-Type', 'audio/mpeg');
-      return reply.send(response.data);
+      return reply.send(subprocess.stdout);
     } catch (err: any) {
       fastify.log.error(err, '[MusicRouter] Stream resolution failed');
       return reply.status(500).send({ error: 'Resolution Failed', message: 'Failed to resolve audio stream link' });
