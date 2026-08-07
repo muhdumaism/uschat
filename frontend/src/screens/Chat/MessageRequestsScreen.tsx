@@ -48,7 +48,7 @@ export const MessageRequestsScreen: React.FC<any> = ({ navigation }) => {
     try {
       await apiClient.post('/requests/respond', {
         requestId,
-        status: accept ? 'ACCEPTED' : 'DECLINED',
+        action: accept ? 'accept' : 'decline',
       });
       Alert.alert('SUCCESS', accept ? 'MESSAGE REQUEST ACCEPTED.' : 'MESSAGE REQUEST DECLINED.');
       fetchRequests();
@@ -59,7 +59,7 @@ export const MessageRequestsScreen: React.FC<any> = ({ navigation }) => {
 
   const handleCancel = async (requestId: string) => {
     try {
-      await apiClient.post('/requests/cancel', { requestId });
+      await apiClient.delete(`/requests/cancel/${requestId}`);
       Alert.alert('SUCCESS', 'OUTGOING MESSAGE REQUEST CANCELLED.');
       fetchRequests();
     } catch (err: any) {
