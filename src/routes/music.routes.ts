@@ -40,11 +40,6 @@ function convertJsonToNetscape(jsonCookies: any[]): string {
 const searchSchema = z.object({
   q: z.string().min(1),
 });
-
-const spotifyImportSchema = z.object({
-  playlistUrl: z.string().url(),
-});
-
 const playlistCreateSchema = z.object({
   name: z.string().min(1).max(100),
 });
@@ -205,175 +200,19 @@ export async function musicRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // 3. Spotify Metadata Import (Playlists, Albums, Tracks, Artists)
-  fastify.post('/spotify-import', { preHandler: [authenticate] }, async (request, reply) => {
-    const { playlistUrl } = spotifyImportSchema.parse(request.body);
-    const userId = request.user.id;
-
-    if (!config.spotify.clientId || !config.spotify.clientSecret) {
-      return reply.status(400).send({
-        error: 'Bad Request',
-        message: 'Spotify Client Credentials are not configured on the server.',
-      });
-    }
-
-    try {
-      // Parse import type and ID from URL
-      const playlistMatch = /\/playlist\/([a-zA-Z0-9]+)/.exec(playlistUrl);
-      const albumMatch = /\/album\/([a-zA-Z0-9]+)/.exec(playlistUrl);
-      const trackMatch = /\/track\/([a-zA-Z0-9]+)/.exec(playlistUrl);
-      const artistMatch = /\/artist\/([a-zA-Z0-9]+)/.exec(playlistUrl);
-
-      let importType: 'playlist' | 'album' | 'track' | 'artist' | null = null;
-      let spotifyId = '';
-
-      if (playlistMatch) {
-        importType = 'playlist';
-        spotifyId = playlistMatch[1];
-      } else if (albumMatch) {
-        importType = 'album';
-        spotifyId = albumMatch[1];
-      } else if (trackMatch) {
-        importType = 'track';
-        spotifyId = trackMatch[1];
-      } else if (artistMatch) {
-        importType = 'artist';
-        spotifyId = artistMatch[1];
-      }
-
-      if (!importType) {
-        return reply.status(400).send({ error: 'Bad Request', message: 'Invalid Spotify URL. Must be a playlist, album, track, or artist URL.' });
-      }
-
-      // 1. Get Spotify Client Access Token
-      const tokenRes = await axios.post(
-        'https://accounts.spotify.com/api/token',
-        'grant_type=client_credentials',
-        {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            Authorization: `Basic ${Buffer.from(
-              `${config.spotify.clientId}:${config.spotify.clientSecret}`
-            ).toString('base64')}`,
-          },
-        }
-      );
-      const accessToken = tokenRes.data.access_token;
-
-      let tracksList: any[] = [];
-      let playlistName = 'Imported Spotify List';
-      let coverUrl = null;
-
-      // 2. Fetch appropriate type metadata from Spotify APIs
-      if (importType === 'playlist') {
-        const res = await axios.get(`https://api.spotify.com/v1/playlists/${spotifyId}`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        playlistName = res.data.name || 'Imported Playlist';
-        coverUrl = res.data.images?.[0]?.url || null;
-        tracksList = (res.data.tracks?.items || [])
-          .filter((item: any) => item.track)
-          .map((item: any) => item.track);
-      } else if (importType === 'album') {
-        const res = await axios.get(`https://api.spotify.com/v1/albums/${spotifyId}`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        playlistName = res.data.name || 'Imported Album';
-        coverUrl = res.data.images?.[0]?.url || null;
-        tracksList = (res.data.tracks?.items || []).map((t: any) => ({
-          ...t,
-          album: { images: res.data.images, name: res.data.name },
-        }));
-      } else if (importType === 'track') {
-        const res = await axios.get(`https://api.spotify.com/v1/tracks/${spotifyId}`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        playlistName = res.data.name || 'Imported Track';
-        coverUrl = res.data.album?.images?.[0]?.url || null;
-        tracksList = [res.data];
-      } else if (importType === 'artist') {
-        const res = await axios.get(`https://api.spotify.com/v1/artists/${spotifyId}/top-tracks?market=US`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        const artistMeta = await axios.get(`https://api.spotify.com/v1/artists/${spotifyId}`, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        playlistName = `${artistMeta.data.name || 'Artist'} Top Tracks`;
-        coverUrl = artistMeta.data.images?.[0]?.url || null;
-        tracksList = res.data.tracks || [];
-      }
-
-      // 3. Create Playlist Record in DB
-      const dbPlaylist = await prisma.playlist.create({
-        data: {
-          userId,
-          name: playlistName,
-          coverUrl,
-        },
-      });
-
-      // 4. Save tracks list to DB
-      const tracksToCreate = [];
-      for (let i = 0; i < tracksList.length; i++) {
-        const track = tracksList[i];
-        if (!track) continue;
-
-        const trackName = track.name;
-        const artistName = track.artists?.map((a: any) => a.name).join(', ') || 'Unknown';
-        const albumName = track.album?.name || null;
-        const durationSecs = Math.floor((track.duration_ms || 0) / 1000);
-        const trackCover = track.album?.images?.[0]?.url || coverUrl;
-
-        const searchQuery = `${trackName} ${artistName}`;
-        const searchUri = `https://www.youtube.com/results?search_query=${encodeURIComponent(searchQuery)}`;
-
-        tracksToCreate.push({
-          playlistId: dbPlaylist.id,
-          title: trackName,
-          artist: artistName,
-          album: albumName,
-          duration: durationSecs,
-          coverUrl: trackCover,
-          trackUri: searchUri,
-          position: i,
-        });
-      }
-
-      if (tracksToCreate.length > 0) {
-        await prisma.playlistTrack.createMany({
-          data: tracksToCreate,
-        });
-      }
-
-      // Fetch the created playlist with its tracks
-      const populated = await prisma.playlist.findUnique({
-        where: { id: dbPlaylist.id },
-        include: { tracks: { orderBy: { position: 'asc' } } },
-      });
-
-      return reply.status(201).send(populated);
-    } catch (err: any) {
-      fastify.log.error(err, '[MusicRouter] Spotify import error');
-      return reply.status(500).send({
-        error: 'Import Failed',
-        message: err.response?.data?.error?.message || 'Failed to import Spotify item',
-      });
-    }
-  });
-
-  // 4. Playlists CRUD Endpoints
+  // 3. Playlists CRUD Endpoints
   fastify.get('/playlists', { preHandler: [authenticate] }, async (request, reply) => {
     const playlists = await prisma.playlist.findMany({
       where: { userId: request.user.id },
       include: {
-        _count: { select: { tracks: true } },
+        tracks: { orderBy: { position: 'asc' } },
       },
       orderBy: { createdAt: 'desc' },
     });
     return reply.send(playlists);
   });
 
-  fastify.post('/playlists', { preHandler: [authenticate] }, async (request, reply) => {
+  fastify.post('/playlist', { preHandler: [authenticate] }, async (request, reply) => {
     const { name } = playlistCreateSchema.parse(request.body);
     const playlist = await prisma.playlist.create({
       data: {
@@ -399,7 +238,7 @@ export async function musicRoutes(fastify: FastifyInstance) {
     return reply.send(playlist);
   });
 
-  fastify.delete('/playlists/:id', { preHandler: [authenticate] }, async (request, reply) => {
+  fastify.delete('/playlist/:id', { preHandler: [authenticate] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     await prisma.playlist.deleteMany({
       where: { id, userId: request.user.id },
@@ -455,8 +294,8 @@ export async function musicRoutes(fastify: FastifyInstance) {
     return reply.send({ success: true });
   });
 
-  // 5. Liked Songs Endpoints
-  fastify.get('/liked-songs', { preHandler: [authenticate] }, async (request, reply) => {
+  // 4. Liked Songs Endpoints
+  fastify.get('/liked', { preHandler: [authenticate] }, async (request, reply) => {
     const liked = await prisma.likedSong.findMany({
       where: { userId: request.user.id },
       orderBy: { createdAt: 'desc' },
@@ -464,9 +303,18 @@ export async function musicRoutes(fastify: FastifyInstance) {
     return reply.send(liked);
   });
 
-  fastify.post('/liked-songs', { preHandler: [authenticate] }, async (request, reply) => {
+  fastify.post('/like', { preHandler: [authenticate] }, async (request, reply) => {
     const body = addTrackSchema.parse(request.body);
     const userId = request.user.id;
+
+    // Check if already liked to prevent unique constraint crash
+    const existing = await prisma.likedSong.findFirst({
+      where: { userId, title: body.title, artist: body.artist },
+    });
+
+    if (existing) {
+      return reply.status(200).send(existing);
+    }
 
     const liked = await prisma.likedSong.create({
       data: {
@@ -483,10 +331,10 @@ export async function musicRoutes(fastify: FastifyInstance) {
     return reply.status(201).send(liked);
   });
 
-  fastify.delete('/liked-songs/:id', { preHandler: [authenticate] }, async (request, reply) => {
-    const { id } = request.params as { id: string };
+  fastify.delete('/unlike', { preHandler: [authenticate] }, async (request, reply) => {
+    const { trackUri } = z.object({ trackUri: z.string().url() }).parse(request.query);
     await prisma.likedSong.deleteMany({
-      where: { id, userId: request.user.id },
+      where: { trackUri, userId: request.user.id },
     });
     return reply.send({ success: true });
   });
