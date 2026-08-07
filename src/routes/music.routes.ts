@@ -180,6 +180,19 @@ export async function musicRoutes(fastify: FastifyInstance) {
       // Execute ytdl-exec and stream its stdout directly to Fastify response
       const subprocess = (ytdlExec as any).exec(uri, ytDlpOptions);
 
+      let stderrOutput = '';
+      if (subprocess.stderr) {
+        subprocess.stderr.on('data', (chunk: any) => {
+          stderrOutput += chunk.toString();
+        });
+      }
+
+      subprocess.on('close', (code: any) => {
+        if (code !== 0 && code !== null) {
+          fastify.log.error({ code, stderr: stderrOutput.trim() }, '[MusicRouter] yt-dlp subprocess exited with error code');
+        }
+      });
+
       // Kill the subprocess if the client disconnects/closes connection
       request.raw.on('close', () => {
         if (!subprocess.killed) {
