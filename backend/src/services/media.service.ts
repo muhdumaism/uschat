@@ -80,7 +80,7 @@ export class MediaService {
       return `https://${config.s3.bucket}.s3.${config.s3.region}.amazonaws.com/${filename}`;
     } else {
       // Local storage url
-      return `https://uschat.ruptyl.space/uploads/${filename}`;
+      return `https://backend.uschat.fun/uploads/${filename}`;
     }
   }
 
