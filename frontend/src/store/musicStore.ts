@@ -1,32 +1,42 @@
 import { create } from 'zustand';
-import { Audio } from 'expo-av';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { apiClient, API_BASE_URL } from '../api/client';
+import { apiClient } from '../api/client';
 import { NativeModules, DeviceEventEmitter, Platform } from 'react-native';
+import { YouTubeBridgeApi } from '../components/YouTubePlayerBridge';
 
 const { USChatMediaSessionModule } = NativeModules;
 
 export interface Track {
   title: string;
   artist: string;
-  duration: number; // seconds
-  trackUri: string; // youtube/spotify link
+  duration: number; // in seconds
+  trackUri: string; // YouTube watch link or direct videoId
   coverUrl: string | null;
   album?: string | null;
+}
+
+export function extractYouTubeVideoId(urlOrId: string): string {
+  if (!urlOrId) return '';
+  if (/^[a-zA-Z0-9_-]{11}$/.test(urlOrId)) return urlOrId;
+  const match = urlOrId.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/);
+  return match ? match[1] : urlOrId;
 }
 
 interface MusicState {
   currentTrack: Track | null;
   isPlaying: boolean;
-  sound: Audio.Sound | null;
+  bridge: YouTubeBridgeApi | null;
   queue: Track[];
   queueIndex: number;
-  position: number; // ms
-  duration: number; // ms
+  position: number; // in milliseconds
+  duration: number; // in milliseconds
   isLooping: boolean;
   isShuffled: boolean;
   originalQueue: Track[];
   likedSongs: Track[];
+
+  setBridge: (bridge: YouTubeBridgeApi | null) => void;
+  handlePlayerEvent: (type: string, data: any) => void;
 
   playTrack: (track: Track, newQueue?: Track[]) => Promise<void>;
   pauseTrack: () => Promise<void>;
@@ -51,37 +61,10 @@ interface MusicState {
 }
 
 export const useMusicStore = create<MusicState>((set, get) => {
-  let isUpdating = false;
-
-  const onPlaybackStatusUpdate = (status: any) => {
-    if (!status || isUpdating) return;
-    if (status.isLoaded) {
-      set({
-        position: status.positionMillis,
-        duration: status.durationMillis || 0,
-        isPlaying: status.isPlaying,
-      });
-
-      // Sync with Android MediaSession
-      if (Platform.OS === 'android' && USChatMediaSessionModule) {
-        USChatMediaSessionModule.updatePlaybackState(status.isPlaying, status.positionMillis);
-      }
-
-      if (status.didJustFinish) {
-        if (status.positionMillis && status.positionMillis > 1000) {
-          get().nextTrack();
-        } else {
-          console.warn('Track ended prematurely or failed to load, stopping playback.');
-          set({ isPlaying: false });
-        }
-      }
-    }
-  };
-
   return {
     currentTrack: null,
     isPlaying: false,
-    sound: null,
+    bridge: null,
     queue: [],
     queueIndex: -1,
     position: 0,
@@ -91,23 +74,87 @@ export const useMusicStore = create<MusicState>((set, get) => {
     originalQueue: [],
     likedSongs: [],
 
-    playTrack: async (track: Track, newQueue?: Track[]) => {
+    setBridge: (bridge) => set({ bridge }),
+
+    updateStatus: (status: any) => {
+      if (status) {
+        set({
+          position: status.positionMillis || 0,
+          duration: status.durationMillis || 0,
+          isPlaying: status.isPlaying ?? false,
+        });
+      }
+    },
+
+    handlePlayerEvent: (type: string, data: any) => {
       const state = get();
-      
-      if (state.sound) {
-        try {
-          isUpdating = true;
-          await state.sound.unloadAsync();
-        } catch (e) {
-          console.warn('Sound unload error:', e);
-        } finally {
-          isUpdating = false;
+
+      switch (type) {
+        case 'READY':
+          console.log('[MusicStore] YouTube IFrame player bridge is ready');
+          break;
+
+        case 'STATE_CHANGE': {
+          // YT.PlayerState: ENDED = 0, PLAYING = 1, PAUSED = 2, BUFFERING = 3, CUED = 5
+          const ytState = data.state;
+          const posMs = Math.floor((data.currentTime || 0) * 1000);
+          const durMs = Math.floor((data.duration || 0) * 1000);
+
+          if (ytState === 1) {
+            // PLAYING
+            set({ isPlaying: true, position: posMs, duration: durMs || state.duration });
+            if (Platform.OS === 'android' && USChatMediaSessionModule) {
+              USChatMediaSessionModule.updatePlaybackState(true, posMs);
+            }
+          } else if (ytState === 2) {
+            // PAUSED
+            set({ isPlaying: false, position: posMs });
+            if (Platform.OS === 'android' && USChatMediaSessionModule) {
+              USChatMediaSessionModule.updatePlaybackState(false, posMs);
+            }
+          } else if (ytState === 0) {
+            // ENDED - Infinite loop protection: Only advance if played for >1s
+            if (state.position > 1000) {
+              if (state.isLooping && state.currentTrack) {
+                get().playTrack(state.currentTrack);
+              } else {
+                get().nextTrack();
+              }
+            } else {
+              console.warn('[MusicStore] Track ended prematurely (<1s), halting auto-advance.');
+              set({ isPlaying: false });
+              if (Platform.OS === 'android' && USChatMediaSessionModule) {
+                USChatMediaSessionModule.updatePlaybackState(false, 0);
+              }
+            }
+          }
+          break;
+        }
+
+        case 'TIME_UPDATE': {
+          const currentMs = Math.floor((data.currentTime || 0) * 1000);
+          const durMs = Math.floor((data.duration || 0) * 1000);
+          set({ position: currentMs, duration: durMs || state.duration });
+          break;
+        }
+
+        case 'ERROR': {
+          console.error('[MusicStore] YouTube IFrame error code:', data.code);
+          set({ isPlaying: false });
+          if (Platform.OS === 'android' && USChatMediaSessionModule) {
+            USChatMediaSessionModule.updatePlaybackState(false, state.position);
+          }
+          break;
         }
       }
+    },
 
+    playTrack: async (track: Track, newQueue?: Track[]) => {
+      const state = get();
       const activeQueue = newQueue || state.queue;
       const index = activeQueue.findIndex((t) => t.trackUri === track.trackUri);
-      
+      const videoId = extractYouTubeVideoId(track.trackUri);
+
       set({
         currentTrack: track,
         isPlaying: true,
@@ -115,93 +162,63 @@ export const useMusicStore = create<MusicState>((set, get) => {
         duration: track.duration * 1000,
         queue: activeQueue,
         queueIndex: index !== -1 ? index : 0,
-        originalQueue: newQueue ? [...newQueue] : state.originalQueue
+        originalQueue: newQueue ? [...newQueue] : state.originalQueue,
       });
 
-      try {
-        const token = await AsyncStorage.getItem('@uschat/token');
-        const streamUrl = `${API_BASE_URL}/music/stream?uri=${encodeURIComponent(track.trackUri)}`;
-
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: false,
-          playsInSilentModeIOS: true,
-          staysActiveInBackground: true,
-          playThroughEarpieceAndroid: false,
-        });
-
-        const { sound } = await Audio.Sound.createAsync(
-          {
-            uri: streamUrl,
-            headers: {
-              Authorization: `Bearer ${token || ''}`,
-            },
-          },
-          {
-            shouldPlay: true,
-            isLooping: state.isLooping,
-          },
-          onPlaybackStatusUpdate
-        );
-
-        set({ sound });
-
-        // Sync with Android MediaSession metadata
-        if (Platform.OS === 'android' && USChatMediaSessionModule) {
-          USChatMediaSessionModule.updateMetadata(
-            track.title,
-            track.artist,
-            track.coverUrl || '',
-            track.duration * 1000
-          );
-          USChatMediaSessionModule.updatePlaybackState(true, 0);
-        }
-
-        get().persistState();
-      } catch (err) {
-        console.error('Audio play error:', err);
-        set({ isPlaying: false });
+      // 1. Tell WebView IFrame bridge to load and play video
+      if (state.bridge && videoId) {
+        state.bridge.loadVideo(videoId, 0);
+      } else {
+        console.warn('[MusicStore] Player bridge not mounted or invalid videoId:', videoId);
       }
+
+      // 2. Sync native lock screen / notification media controls
+      if (Platform.OS === 'android' && USChatMediaSessionModule) {
+        USChatMediaSessionModule.updateMetadata(
+          track.title,
+          track.artist,
+          track.coverUrl || '',
+          track.duration * 1000
+        );
+        USChatMediaSessionModule.updatePlaybackState(true, 0);
+      }
+
+      get().persistState();
     },
 
     pauseTrack: async () => {
       const state = get();
-      if (state.sound && state.isPlaying) {
-        try {
-          await state.sound.pauseAsync();
-          set({ isPlaying: false });
-          if (Platform.OS === 'android' && USChatMediaSessionModule) {
-            USChatMediaSessionModule.updatePlaybackState(false, state.position);
-          }
-          get().persistState();
-        } catch (e) {}
+      if (state.bridge && state.isPlaying) {
+        state.bridge.pause();
+        set({ isPlaying: false });
+        if (Platform.OS === 'android' && USChatMediaSessionModule) {
+          USChatMediaSessionModule.updatePlaybackState(false, state.position);
+        }
+        get().persistState();
       }
     },
 
     resumeTrack: async () => {
       const state = get();
-      if (state.sound && !state.isPlaying) {
-        try {
-          await state.sound.playAsync();
-          set({ isPlaying: true });
-          if (Platform.OS === 'android' && USChatMediaSessionModule) {
-            USChatMediaSessionModule.updatePlaybackState(true, state.position);
-          }
-          get().persistState();
-        } catch (e) {}
+      if (state.bridge && !state.isPlaying) {
+        state.bridge.play();
+        set({ isPlaying: true });
+        if (Platform.OS === 'android' && USChatMediaSessionModule) {
+          USChatMediaSessionModule.updatePlaybackState(true, state.position);
+        }
+        get().persistState();
       }
     },
 
     stopTrack: async () => {
       const state = get();
-      if (state.sound) {
-        try {
-          await state.sound.stopAsync();
-          set({ isPlaying: false, position: 0 });
-          if (Platform.OS === 'android' && USChatMediaSessionModule) {
-            USChatMediaSessionModule.stopMediaSession();
-          }
-          get().persistState();
-        } catch (e) {}
+      if (state.bridge) {
+        state.bridge.pause();
+        set({ isPlaying: false, position: 0 });
+        if (Platform.OS === 'android' && USChatMediaSessionModule) {
+          USChatMediaSessionModule.stopMediaSession();
+        }
+        get().persistState();
       }
     },
 
@@ -213,46 +230,37 @@ export const useMusicStore = create<MusicState>((set, get) => {
     nextTrack: async () => {
       const state = get();
       if (state.queue.length === 0) return;
-      
-      let nextIdx = state.queueIndex + 1;
-      if (nextIdx >= state.queue.length) {
-        nextIdx = 0; // Wrap around
-      }
-
-      const nextTrack = state.queue[nextIdx];
-      if (nextTrack) {
-        set({ queueIndex: nextIdx });
-        await get().playTrack(nextTrack);
+      let nextIndex = state.queueIndex + 1;
+      if (nextIndex >= state.queue.length) nextIndex = 0;
+      const nextSong = state.queue[nextIndex];
+      if (nextSong) {
+        set({ queueIndex: nextIndex });
+        await get().playTrack(nextSong);
       }
     },
 
     prevTrack: async () => {
       const state = get();
       if (state.queue.length === 0) return;
-
-      let prevIdx = state.queueIndex - 1;
-      if (prevIdx < 0) {
-        prevIdx = state.queue.length - 1;
-      }
-
-      const prevTrack = state.queue[prevIdx];
-      if (prevTrack) {
-        set({ queueIndex: prevIdx });
-        await get().playTrack(prevTrack);
+      let prevIndex = state.queueIndex - 1;
+      if (prevIndex < 0) prevIndex = state.queue.length - 1;
+      const prevSong = state.queue[prevIndex];
+      if (prevSong) {
+        set({ queueIndex: prevIndex });
+        await get().playTrack(prevSong);
       }
     },
 
     seek: async (millis: number) => {
       const state = get();
-      if (state.sound) {
-        try {
-          await state.sound.setPositionAsync(millis);
-          set({ position: millis });
-          if (Platform.OS === 'android' && USChatMediaSessionModule) {
-            USChatMediaSessionModule.updatePlaybackState(state.isPlaying, millis);
-          }
-          get().persistState();
-        } catch (e) {}
+      if (state.bridge) {
+        const seconds = Math.floor(millis / 1000);
+        state.bridge.seekTo(seconds);
+        set({ position: millis });
+        if (Platform.OS === 'android' && USChatMediaSessionModule) {
+          USChatMediaSessionModule.updatePlaybackState(state.isPlaying, millis);
+        }
+        get().persistState();
       }
     },
 
@@ -261,12 +269,8 @@ export const useMusicStore = create<MusicState>((set, get) => {
     },
 
     toggleLoop: () => {
-      const state = get();
-      const nextLoop = !state.isLooping;
+      const nextLoop = !get().isLooping;
       set({ isLooping: nextLoop });
-      if (state.sound) {
-        state.sound.setIsLoopingAsync(nextLoop);
-      }
       get().persistState();
     },
 
@@ -292,14 +296,13 @@ export const useMusicStore = create<MusicState>((set, get) => {
       get().persistState();
     },
 
-    updateStatus: (status: any) => {
-      onPlaybackStatusUpdate(status);
-    },
-
     addToQueue: (track: Track) => {
       const state = get();
-      if (!state.queue.some(t => t.trackUri === track.trackUri)) {
-        set({ queue: [...state.queue, track], originalQueue: [...state.originalQueue, track] });
+      if (!state.queue.some((t) => t.trackUri === track.trackUri)) {
+        set({
+          queue: [...state.queue, track],
+          originalQueue: [...state.originalQueue, track],
+        });
         get().persistState();
       }
     },
@@ -307,21 +310,15 @@ export const useMusicStore = create<MusicState>((set, get) => {
     removeFromQueue: (trackUri: string) => {
       const state = get();
       set({
-        queue: state.queue.filter(t => t.trackUri !== trackUri),
-        originalQueue: state.originalQueue.filter(t => t.trackUri !== trackUri),
+        queue: state.queue.filter((t) => t.trackUri !== trackUri),
+        originalQueue: state.originalQueue.filter((t) => t.trackUri !== trackUri),
       });
       get().persistState();
     },
 
     likeTrack: async (track: Track) => {
       try {
-        await apiClient.post('/music/like', {
-          title: track.title,
-          artist: track.artist,
-          duration: track.duration,
-          coverUrl: track.coverUrl,
-          trackUri: track.trackUri
-        });
+        await apiClient.post('/music/like', track);
         set({ likedSongs: [...get().likedSongs, track] });
       } catch (e) {
         console.warn('Failed to like song:', e);
@@ -331,7 +328,7 @@ export const useMusicStore = create<MusicState>((set, get) => {
     unlikeTrack: async (trackUri: string) => {
       try {
         await apiClient.delete(`/music/unlike?trackUri=${encodeURIComponent(trackUri)}`);
-        set({ likedSongs: get().likedSongs.filter(t => t.trackUri !== trackUri) });
+        set({ likedSongs: get().likedSongs.filter((t) => t.trackUri !== trackUri) });
       } catch (e) {
         console.warn('Failed to unlike song:', e);
       }
@@ -349,7 +346,7 @@ export const useMusicStore = create<MusicState>((set, get) => {
     persistState: async () => {
       const state = get();
       try {
-        const data = {
+        const snapshot = {
           currentTrack: state.currentTrack,
           queue: state.queue,
           queueIndex: state.queueIndex,
@@ -358,7 +355,7 @@ export const useMusicStore = create<MusicState>((set, get) => {
           originalQueue: state.originalQueue,
           position: state.position,
         };
-        await AsyncStorage.setItem('@uschat/music_state', JSON.stringify(data));
+        await AsyncStorage.setItem('@uschat/music_state', JSON.stringify(snapshot));
       } catch (e) {
         console.warn('Failed to save music state:', e);
       }
@@ -366,59 +363,18 @@ export const useMusicStore = create<MusicState>((set, get) => {
 
     initStore: async () => {
       try {
-        const saved = await AsyncStorage.getItem('@uschat/music_state');
-        if (saved) {
-          const parsed = JSON.parse(saved);
+        const raw = await AsyncStorage.getItem('@uschat/music_state');
+        if (raw) {
+          const saved = JSON.parse(raw);
           set({
-            currentTrack: parsed.currentTrack || null,
-            queue: parsed.queue || [],
-            queueIndex: parsed.queueIndex !== undefined ? parsed.queueIndex : -1,
-            isLooping: !!parsed.isLooping,
-            isShuffled: !!parsed.isShuffled,
-            originalQueue: parsed.originalQueue || [],
-            position: parsed.position || 0,
+            currentTrack: saved.currentTrack || null,
+            queue: saved.queue || [],
+            queueIndex: saved.queueIndex ?? -1,
+            isLooping: !!saved.isLooping,
+            isShuffled: !!saved.isShuffled,
+            originalQueue: saved.originalQueue || [],
+            position: saved.position || 0,
           });
-
-          if (parsed.currentTrack) {
-            const token = await AsyncStorage.getItem('@uschat/token');
-            const streamUrl = `${API_BASE_URL}/music/stream?uri=${encodeURIComponent(parsed.currentTrack.trackUri)}`;
-
-            // Build audio session configuration
-            await Audio.setAudioModeAsync({
-              allowsRecordingIOS: false,
-              playsInSilentModeIOS: true,
-              staysActiveInBackground: true,
-              playThroughEarpieceAndroid: false,
-            });
-
-            const { sound } = await Audio.Sound.createAsync(
-              {
-                uri: streamUrl,
-                headers: {
-                  Authorization: `Bearer ${token || ''}`,
-                },
-              },
-              {
-                shouldPlay: false, // Start paused on launch
-                positionMillis: parsed.position || 0,
-                isLooping: !!parsed.isLooping,
-              },
-              onPlaybackStatusUpdate
-            );
-
-            set({ sound });
-
-            // Sync with Android MediaSession metadata as paused state
-            if (Platform.OS === 'android' && USChatMediaSessionModule) {
-              USChatMediaSessionModule.updateMetadata(
-                parsed.currentTrack.title,
-                parsed.currentTrack.artist,
-                parsed.currentTrack.coverUrl || '',
-                parsed.currentTrack.duration * 1000
-              );
-              USChatMediaSessionModule.updatePlaybackState(false, parsed.position || 0);
-            }
-          }
         }
       } catch (e) {
         console.warn('Failed to load music state:', e);
@@ -427,10 +383,12 @@ export const useMusicStore = create<MusicState>((set, get) => {
   };
 });
 
-if (Platform.OS === 'android' && USChatMediaSessionModule) {
+// Hardware / Bluetooth / Lock screen notification media actions
+if (Platform.OS === 'android') {
   DeviceEventEmitter.addListener('onMediaSessionAction', async (event: any) => {
     const { action, params } = event;
     const store = useMusicStore.getState();
+
     switch (action) {
       case 'play':
         await store.resumeTrack();

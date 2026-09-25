@@ -15,6 +15,7 @@ import { AppNavigator } from './src/navigation/AppNavigator';
 import { useChatStore } from './src/store/chatStore';
 import { useThemeStore } from './src/store/themeStore';
 import { useMusicStore } from './src/store/musicStore';
+import { YouTubePlayerBridge } from './src/components/YouTubePlayerBridge';
 
 const navigationRef = createNavigationContainerRef();
 
@@ -64,6 +65,7 @@ export default function App() {
         <View style={{ flex: 1 }}>
           <AppNavigator key={isDarkMode ? 'dark' : 'light'} />
         </View>
+        <YouTubePlayerBridge visible={false} />
       </NavigationContainer>
     </GestureHandlerRootView>
   );
