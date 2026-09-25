@@ -237,52 +237,33 @@ export async function musicRoutes(fastify: FastifyInstance) {
         }
       });
 
-      // Wait for the first data chunk or error before sending HTTP response headers
-      await new Promise<void>((resolve, reject) => {
-        let isStarted = false;
+      reply.header('Content-Type', 'audio/mpeg');
+      reply.header('Cache-Control', 'no-cache');
+      reply.header('Connection', 'keep-alive');
 
-        const onData = (firstChunk: Buffer) => {
-          if (!isStarted) {
-            isStarted = true;
-            // Clean up temporary listeners
-            outputStream.removeListener('error', onError);
-            ytSubprocess.removeListener('close', onClose);
-            ytSubprocess.removeListener('error', onError);
+      const passThrough = new PassThrough();
+      outputStream.pipe(passThrough);
 
-            reply.header('Content-Type', 'audio/mpeg');
-            reply.header('Cache-Control', 'no-cache');
-
-            const passThrough = new PassThrough();
-            passThrough.write(firstChunk);
-            outputStream.pipe(passThrough);
-
-            reply.send(passThrough);
-            resolve();
-          }
-        };
-
-        const onError = (err: any) => {
-          if (!isStarted) {
-            killProcesses();
-            reject(err);
-          }
-        };
-
-        const onClose = (code: any) => {
-          if (!isStarted) {
-            killProcesses();
-            reject(new Error(`yt-dlp exited early with code ${code}: ${stderrOutput.trim()}`));
-          }
-        };
-
-        outputStream.once('data', onData);
-        outputStream.once('error', onError);
-        ytSubprocess.once('error', onError);
-        ytSubprocess.once('close', onClose);
+      outputStream.on('error', (err: any) => {
+        fastify.log.error(err, '[MusicRouter] Output stream error');
+        passThrough.destroy(err);
       });
+
+      ytSubprocess.on('error', (err: any) => {
+        fastify.log.error(err, '[MusicRouter] yt-dlp process error');
+        passThrough.destroy(err);
+      });
+
+      ytSubprocess.on('close', (code: any) => {
+        if (code !== 0 && code !== null) {
+          fastify.log.warn({ code, stderr: stderrOutput.trim() }, '[MusicRouter] yt-dlp process closed with code');
+        }
+      });
+
+      return reply.send(passThrough);
     } catch (err: any) {
       fastify.log.error({ err: err?.message || err }, '[MusicRouter] Stream resolution failed');
-      return reply.status(502).send({ error: 'Stream Failed', message: err?.message || 'Failed to stream audio' });
+      return reply.status(500).send({ error: 'Stream Failed', message: err?.message || 'Failed to stream audio' });
     }
   });
 
