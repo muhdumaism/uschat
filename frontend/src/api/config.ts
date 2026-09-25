@@ -1,4 +1,4 @@
-﻿export const SERVER_URL = 'https://uschat.ruptyl.space';
+export const SERVER_URL = 'https://backend.uschat.fun';
 
 export const API_BASE_URL = `${SERVER_URL}/api/v1`;
 
