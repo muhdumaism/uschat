@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../prisma/client';
 import { authenticate } from '../middleware/auth.middleware';
+import { WebSocketManager } from '../websocket/ws.handler';
 
 const updateProfileSchema = z.object({
   displayName: z.string().min(1).max(50).optional(),
@@ -49,6 +50,29 @@ export async function userRoutes(fastify: FastifyInstance) {
         disappearingDefault: true,
       },
     });
+
+    // Broadcast profile change to all peers in real-time
+    const userChats = await prisma.chatMember.findMany({
+      where: { userId: request.user.id },
+      select: { chatId: true },
+    });
+    const chatIds = userChats.map(c => c.chatId);
+    const peerMembers = await prisma.chatMember.findMany({
+      where: { chatId: { in: chatIds } },
+      select: { userId: true },
+    });
+    const uniquePeers = new Set(peerMembers.map(pm => pm.userId));
+    uniquePeers.delete(request.user.id);
+    uniquePeers.forEach(peerId => {
+      WebSocketManager.sendToUser(peerId, 'PROFILE_UPDATED', {
+        userId: updated.id,
+        username: updated.username,
+        displayName: updated.displayName,
+        avatarUrl: updated.avatarUrl,
+        bio: updated.bio,
+      });
+    });
+
     return reply.send(updated);
   });
 

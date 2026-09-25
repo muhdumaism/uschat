@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../prisma/client';
 import { authenticate } from '../middleware/auth.middleware';
+import { WebSocketManager } from '../websocket/ws.handler';
 
 const sendRequestSchema = z.object({
   receiverUsername: z.string().min(3).max(30),
@@ -142,6 +143,18 @@ export async function requestRoutes(fastify: FastifyInstance) {
       },
     });
 
+    // Notify the receiver in real-time about the incoming request
+    const senderUser = await prisma.user.findUnique({
+      where: { id: senderId },
+      select: { username: true, displayName: true, avatarUrl: true },
+    });
+    WebSocketManager.sendToUser(receiver.id, 'NEW_REQUEST', {
+      id: newReq.id,
+      senderId,
+      sender: senderUser,
+      createdAt: newReq.createdAt,
+    });
+
     return reply.status(201).send({
       message: 'Message request sent successfully.',
       request: newReq,
@@ -202,6 +215,27 @@ export async function requestRoutes(fastify: FastifyInstance) {
         { chatId: newChat.id, userId: messageReq.senderId, role: 'MEMBER' },
         { chatId: newChat.id, userId: receiverId, role: 'MEMBER' },
       ],
+    });
+
+    // 4. Fetch populated chat to send via WebSocket
+    const populatedChat = await prisma.chat.findUnique({
+      where: { id: newChat.id },
+      include: {
+        members: {
+          include: {
+            user: { select: { id: true, username: true, displayName: true, avatarUrl: true } },
+          },
+        },
+      },
+    });
+
+    // 5. Notify BOTH users in real-time about the new chat
+    WebSocketManager.sendToUser(messageReq.senderId, 'REQUEST_ACCEPTED', {
+      requestId: body.requestId,
+      chat: populatedChat,
+    });
+    WebSocketManager.sendToUser(receiverId, 'CHAT_CREATED', {
+      chat: populatedChat,
     });
 
     return reply.send({

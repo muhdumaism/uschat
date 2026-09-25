@@ -352,6 +352,10 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
             blurHash: null,
           }]
         };
+        if (replyingToMessage) {
+          options.replyToId = replyingToMessage.id;
+          setReplyingToMessage(null);
+        }
         await sendMessage(chatId, payloadString, options);
       } else {
         Alert.alert('Upload Error', uploadRes?.message || 'Failed to sync voice message to server.');
@@ -811,6 +815,7 @@ export const ChatScreen: React.FC<any> = ({ route, navigation }) => {
           <MessageBubble
             message={item}
             isMe={item.senderId === currentUser?.id}
+            isGroup={isGroup}
             onOpenViewOnce={() => {
               if (!item.isViewed && (item.decryptedText || item.encryptedContent)) {
                 setViewingImageUri(item.decryptedText || item.encryptedContent);

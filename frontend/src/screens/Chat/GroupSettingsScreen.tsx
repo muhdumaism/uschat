@@ -12,22 +12,27 @@ import {
   StatusBar,
   Platform,
 } from 'react-native';
-import { ArrowLeft, User, UserCheck, ShieldCheck, Users, Edit3, Trash2, CheckCircle, Pin } from 'lucide-react-native';
+import { ArrowLeft, User, UserCheck, ShieldCheck, Users, Edit3, Trash2, CheckCircle, Pin, Camera } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { BRUTALIST_COLORS, BRUTALIST_STYLES, useBrutalistTheme } from '../../theme/brutalistTheme';
 import { BrutalistCard } from '../../components/BrutalistCard';
 import { BrutalistButton } from '../../components/BrutalistButton';
 import { BrutalistTextInput } from '../../components/BrutalistTextInput';
 import { Avatar } from '../../components/Avatar';
 import { apiClient } from '../../api/client';
+import { API_BASE_URL } from '../../api/config';
 import { useAuthStore } from '../../store/authStore';
+import { useChatStore } from '../../store/chatStore';
 
 export const GroupSettingsScreen: React.FC<any> = ({ route, navigation }) => {
   const { colors, isDarkMode } = useBrutalistTheme();
   const { chatId, groupName } = route.params;
   const currentUser = useAuthStore((s) => s.user);
+  const fetchChats = useChatStore((s) => s.fetchChats);
 
   const [chatDetails, setChatDetails] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   
   // Edit configurations
   const [description, setDescription] = useState('');
@@ -73,6 +78,58 @@ export const GroupSettingsScreen: React.FC<any> = ({ route, navigation }) => {
       console.warn('Fetch pins error:', e);
     } finally {
       setLoadingPins(false);
+    }
+  };
+
+  const handleChangeGroupAvatar = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (result.canceled || !result.assets?.[0]) return;
+
+      setUploadingAvatar(true);
+      const asset = result.assets[0];
+      const filename = `group_avatar_${Date.now()}.jpg`;
+
+      const formData = new FormData();
+      formData.append('file', {
+        uri: asset.uri,
+        name: filename,
+        type: 'image/jpeg',
+      } as any);
+
+      const token = useAuthStore.getState().token;
+      const uploadResponse = await fetch(`${API_BASE_URL}/media/upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+
+      const uploadRes = await uploadResponse.json();
+      if (!uploadRes?.fileUrl) {
+        Alert.alert('UPLOAD FAILED', 'Could not upload the group icon.');
+        return;
+      }
+
+      // Update the group chat avatar
+      await apiClient.patch(`/chats/group/${chatId}`, {
+        avatar: uploadRes.fileUrl,
+      });
+
+      // Refresh data
+      fetchDetails();
+      fetchChats();
+      Alert.alert('SUCCESS', 'Group icon updated.');
+    } catch (err: any) {
+      console.error('Group avatar upload error:', err);
+      Alert.alert('ERROR', 'Failed to update group icon.');
+    } finally {
+      setUploadingAvatar(false);
     }
   };
 
@@ -180,9 +237,23 @@ export const GroupSettingsScreen: React.FC<any> = ({ route, navigation }) => {
         {/* Profile/Metadata section */}
         <BrutalistCard accentColor={colors.cardBg} padding={16} style={styles.metaCard}>
           <View style={styles.avatarRow}>
-            <View style={[styles.avatarBezel, { backgroundColor: colors.cardBg, borderColor: colors.border }]}>
+            <TouchableOpacity
+              onPress={isSelfAdmin ? handleChangeGroupAvatar : undefined}
+              activeOpacity={isSelfAdmin ? 0.7 : 1}
+              disabled={uploadingAvatar}
+              style={[styles.avatarBezel, { backgroundColor: colors.cardBg, borderColor: colors.border }]}
+            >
               <Avatar name={groupName} uri={chatDetails.avatar} size={72} />
-            </View>
+              {isSelfAdmin && (
+                <View style={styles.cameraOverlay}>
+                  {uploadingAvatar ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Camera size={18} color="#FFFFFF" />
+                  )}
+                </View>
+              )}
+            </TouchableOpacity>
             <View style={styles.groupInfoBox}>
               <Text style={[styles.groupTitle, { color: colors.textPrimary }]}>{groupName.toUpperCase()}</Text>
               <Text style={[styles.subText, { color: colors.textSecondary }]}>
@@ -402,6 +473,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
+  },
+  cameraOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 26,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   groupInfoBox: {
     marginLeft: 16,

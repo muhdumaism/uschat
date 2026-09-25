@@ -503,6 +503,63 @@ export const useChatStore = create<ChatState>((set, get) => ({
           }
           return { onlineUsers: updated };
         });
+      } else if (event === 'PROFILE_UPDATED') {
+        // A peer updated their profile — update their avatar/name in the chat list and messages
+        set((state) => {
+          const updatedChats = state.chats.map((chat) => {
+            const hasMember = chat.members?.some((m: any) => m.id === payload.userId);
+            if (!hasMember) return chat;
+
+            const updatedMembers = chat.members.map((m: any) =>
+              m.id === payload.userId
+                ? { ...m, displayName: payload.displayName, avatarUrl: payload.avatarUrl, username: payload.username }
+                : m
+            );
+
+            // For direct chats, update the chat-level avatar and name
+            if (chat.type === 'DIRECT' && chat.peerUsername === payload.username) {
+              return {
+                ...chat,
+                name: payload.displayName || chat.name,
+                avatar: payload.avatarUrl,
+                members: updatedMembers,
+              };
+            }
+
+            return { ...chat, members: updatedMembers };
+          });
+
+          return { chats: updatedChats };
+        });
+      } else if (event === 'REQUEST_ACCEPTED' || event === 'CHAT_CREATED') {
+        // A message request was accepted — add the new chat to the list
+        if (payload.chat) {
+          const chat = payload.chat;
+          const currentUser = useAuthStore.getState().user;
+          const otherMember = chat.members?.find((m: any) => m.user?.id !== currentUser?.id);
+          const peer = otherMember?.user || chat.members?.[0]?.user;
+          const newChatItem: ChatItem = {
+            id: chat.id,
+            type: chat.type,
+            name: chat.type === 'DIRECT' ? (peer?.displayName || peer?.username || 'User') : (chat.name || 'Group'),
+            avatar: chat.type === 'DIRECT' ? peer?.avatarUrl : chat.avatar,
+            peerUsername: peer?.username,
+            isMuted: false,
+            isArchived: false,
+            lastMessage: null,
+            updatedAt: chat.updatedAt || new Date().toISOString(),
+            members: chat.members?.map((m: any) => m.user) || [],
+          };
+          set((state) => {
+            const exists = state.chats.some(c => c.id === chat.id);
+            if (exists) return state;
+            return { chats: [newChatItem, ...state.chats] };
+          });
+        }
+      } else if (event === 'NEW_REQUEST') {
+        // A new message request was received — refresh chats (the request screen will pick it up)
+        // We could add a dedicated requests store, but for now a refetch works
+        get().fetchChats();
       }
     });
   },

@@ -54,6 +54,7 @@ const CachedImage: React.FC<{ uri: string; style: any; blurHash?: string | null 
 export interface MessageBubbleProps {
   message: ChatMessage;
   isMe: boolean;
+  isGroup?: boolean;
   onOpenViewOnce?: () => void;
   onOpenImage?: (uri: string) => void;
   onLongPress?: () => void;
@@ -61,6 +62,21 @@ export interface MessageBubbleProps {
   onSwipeToReply?: (message: ChatMessage) => void;
   onReplyPress?: (replyToId: string) => void;
 }
+
+const GROUP_SENDER_COLORS = [
+  '#E53935', '#D81B60', '#8E24AA', '#5E35B1',
+  '#3949AB', '#1E88E5', '#039BE5', '#00ACC1',
+  '#00897B', '#43A047', '#7CB342', '#C0CA33',
+  '#F4511E', '#6D4C41', '#F06292', '#BA68C8',
+];
+
+const getSenderColor = (senderId: string): string => {
+  let hash = 0;
+  for (let i = 0; i < senderId.length; i++) {
+    hash = senderId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return GROUP_SENDER_COLORS[Math.abs(hash) % GROUP_SENDER_COLORS.length];
+};
 
 const getReplyText = (msg: any) => {
   if (!msg) return '';
@@ -77,6 +93,7 @@ const getReplyText = (msg: any) => {
 export const MessageBubble = React.memo<MessageBubbleProps>(({
   message,
   isMe,
+  isGroup,
   onOpenViewOnce,
   onOpenImage,
   onLongPress,
@@ -235,6 +252,11 @@ export const MessageBubble = React.memo<MessageBubbleProps>(({
 
     return (
       <View style={isMe ? styles.myContainer : styles.peerContainer}>
+        {isGroup && !isMe && message.sender && (
+          <Text style={[styles.groupSenderName, { color: getSenderColor(message.senderId) }]}>
+            {message.sender.displayName || message.sender.username}
+          </Text>
+        )}
         <View style={styles.bubbleWrapper}>
           <View style={[styles.shadowLayer, { backgroundColor: colors.border, borderColor: colors.border }]} />
           <TouchableOpacity
@@ -355,6 +377,15 @@ const styles = StyleSheet.create({
     width: '100%',
     marginVertical: 8,
     paddingLeft: 6,
+  },
+  groupSenderName: {
+    fontSize: 11,
+    fontWeight: '900',
+    fontFamily: BRUTALIST_STYLES.fontBold,
+    marginBottom: 2,
+    marginLeft: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   bubbleWrapper: {
     position: 'relative',
