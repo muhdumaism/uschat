@@ -265,7 +265,7 @@ export class NotificationService {
           };
         }
 
-        console.log(`[NotificationService] FCM Request details for token ID ${id}:`, JSON.stringify(messagePayload, null, 2));
+        // Removed verbose logging of messagePayload to protect message privacy
         const fcmResponse = await getMessaging().send(messagePayload);
         console.log(`[NotificationService] FCM Response for token ID ${id}: Success! ID = ${fcmResponse}`);
       } catch (err: any) {
