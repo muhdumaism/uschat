@@ -322,7 +322,7 @@ export const MessageBubble = React.memo<MessageBubbleProps>(({
         friction={2}
         leftThreshold={40}
         renderLeftActions={renderLeftActions}
-        onSwipeableOpen={(direction) => {
+        onSwipeableWillOpen={(direction) => {
           if (direction === 'left') {
             onSwipeToReply(message);
             try {
