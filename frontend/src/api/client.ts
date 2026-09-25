@@ -1,4 +1,4 @@
-﻿import axios from 'axios';
+import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from './config';
 
@@ -18,3 +18,18 @@ apiClient.interceptors.request.use(async (config) => {
   }
   return config;
 });
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response && error.response.status === 401) {
+      console.warn('401 Unauthorized received. Logging out user...');
+      await AsyncStorage.removeItem('@uschat/token');
+      await AsyncStorage.removeItem('@uschat/refreshToken');
+      await AsyncStorage.removeItem('@uschat/user');
+      const { useAuthStore } = require('../store/authStore');
+      useAuthStore.getState().logout();
+    }
+    return Promise.reject(error);
+  }
+);
