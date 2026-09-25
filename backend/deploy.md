@@ -64,7 +64,7 @@ Since USCHAT uses Prisma (with SQLite configured by default), run the database m
 
 ```bash
 npx prisma generate
-npx prisma migrate deploy
+npx prisma db push
 ```
 
 ## 5. Build and Start the Application
