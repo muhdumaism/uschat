@@ -68,7 +68,12 @@ export const useMusicStore = create<MusicState>((set, get) => {
       }
 
       if (status.didJustFinish) {
-        get().nextTrack();
+        if (status.positionMillis && status.positionMillis > 1000) {
+          get().nextTrack();
+        } else {
+          console.warn('Track ended prematurely or failed to load, stopping playback.');
+          set({ isPlaying: false });
+        }
       }
     }
   };

@@ -5,9 +5,20 @@ import ytdl from '@distube/ytdl-core';
 import ytdlExec from 'yt-dlp-exec';
 import fs from 'fs';
 import path from 'path';
+import { spawn, spawnSync } from 'child_process';
+import { PassThrough } from 'stream';
 import { prisma } from '../prisma/client';
 import { authenticate } from '../middleware/auth.middleware';
 import { config } from '../config';
+
+let hasFFmpeg = false;
+try {
+  const check = spawnSync('ffmpeg', ['-version']);
+  hasFFmpeg = check.status === 0;
+} catch {
+  hasFFmpeg = false;
+}
+console.log(`[MusicRouter] FFmpeg detected: ${hasFFmpeg}`);
 
 // Load YouTube agent cookies from project root if it exists
 let ytdlAgent: any = undefined;
@@ -169,7 +180,7 @@ export async function musicRoutes(fastify: FastifyInstance) {
 
       const ytDlpOptions: any = {
         output: '-',
-        format: 'bestaudio',
+        format: 'bestaudio/ba/b[height<=360]/b[ext=mp4]/best',
         jsRuntimes: 'node:' + process.execPath,
       };
 
@@ -177,39 +188,101 @@ export async function musicRoutes(fastify: FastifyInstance) {
         ytDlpOptions.cookies = netscapeCookiesPath;
       }
 
-      // Execute ytdl-exec and stream its stdout directly to Fastify response
-      const subprocess = (ytdlExec as any).exec(uri, ytDlpOptions);
+      // Execute ytdl-exec
+      const ytSubprocess = (ytdlExec as any).exec(uri, ytDlpOptions);
 
       let stderrOutput = '';
-      if (subprocess.stderr) {
-        subprocess.stderr.on('data', (chunk: any) => {
+      if (ytSubprocess.stderr) {
+        ytSubprocess.stderr.on('data', (chunk: any) => {
           stderrOutput += chunk.toString();
         });
       }
 
-      subprocess.on('close', (code: any) => {
-        if (code !== 0 && code !== null) {
-          fastify.log.error({ code, stderr: stderrOutput.trim() }, '[MusicRouter] yt-dlp subprocess exited with error code');
-        }
-      });
+      let ffmpegProcess: any = null;
+      let outputStream: any = ytSubprocess.stdout;
 
-      // Kill the subprocess if the client disconnects/closes connection
+      if (hasFFmpeg) {
+        ffmpegProcess = spawn('ffmpeg', [
+          '-loglevel', 'error',
+          '-i', 'pipe:0',
+          '-vn',
+          '-acodec', 'libmp3lame',
+          '-b:a', '128k',
+          '-f', 'mp3',
+          'pipe:1'
+        ]);
+
+        ytSubprocess.stdout.pipe(ffmpegProcess.stdin);
+        ffmpegProcess.stdin.on('error', () => {});
+        ffmpegProcess.on('error', (err: any) => {
+          fastify.log.error(err, '[MusicRouter] ffmpeg process error');
+        });
+        outputStream = ffmpegProcess.stdout;
+      }
+
+      const killProcesses = () => {
+        try {
+          if (ytSubprocess && !ytSubprocess.killed) ytSubprocess.kill();
+        } catch {}
+        try {
+          if (ffmpegProcess && !ffmpegProcess.killed) ffmpegProcess.kill();
+        } catch {}
+      };
+
+      // Kill processes if client disconnects/closes connection
       request.raw.on('close', () => {
-        if (!subprocess.killed) {
-          fastify.log.info('[MusicRouter] Client disconnected, killing yt-dlp stream process...');
-          subprocess.kill();
+        if ((ytSubprocess && !ytSubprocess.killed) || (ffmpegProcess && !ffmpegProcess.killed)) {
+          fastify.log.info('[MusicRouter] Client disconnected, killing stream processes...');
+          killProcesses();
         }
       });
 
-      subprocess.on('error', (err: any) => {
-        fastify.log.error(err, '[MusicRouter] yt-dlp subprocess error');
-      });
+      // Wait for the first data chunk or error before sending HTTP response headers
+      await new Promise<void>((resolve, reject) => {
+        let isStarted = false;
 
-      reply.header('Content-Type', 'audio/mpeg');
-      return reply.send(subprocess.stdout);
+        const onData = (firstChunk: Buffer) => {
+          if (!isStarted) {
+            isStarted = true;
+            // Clean up temporary listeners
+            outputStream.removeListener('error', onError);
+            ytSubprocess.removeListener('close', onClose);
+            ytSubprocess.removeListener('error', onError);
+
+            reply.header('Content-Type', 'audio/mpeg');
+            reply.header('Cache-Control', 'no-cache');
+
+            const passThrough = new PassThrough();
+            passThrough.write(firstChunk);
+            outputStream.pipe(passThrough);
+
+            reply.send(passThrough);
+            resolve();
+          }
+        };
+
+        const onError = (err: any) => {
+          if (!isStarted) {
+            killProcesses();
+            reject(err);
+          }
+        };
+
+        const onClose = (code: any) => {
+          if (!isStarted) {
+            killProcesses();
+            reject(new Error(`yt-dlp exited early with code ${code}: ${stderrOutput.trim()}`));
+          }
+        };
+
+        outputStream.once('data', onData);
+        outputStream.once('error', onError);
+        ytSubprocess.once('error', onError);
+        ytSubprocess.once('close', onClose);
+      });
     } catch (err: any) {
-      fastify.log.error(err, '[MusicRouter] Stream resolution failed');
-      return reply.status(500).send({ error: 'Resolution Failed', message: 'Failed to resolve audio stream link' });
+      fastify.log.error({ err: err?.message || err }, '[MusicRouter] Stream resolution failed');
+      return reply.status(502).send({ error: 'Stream Failed', message: err?.message || 'Failed to stream audio' });
     }
   });
 
